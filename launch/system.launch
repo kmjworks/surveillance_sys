@@ -1,0 +1,9 @@
+<launch>
+    <!-- Parameters -->
+    <rosparam command="load" file="$(find surveillance_system)/config/system_params.yaml" />
+
+    <!-- Nodes -->
+    <node pkg="surveillance_system" type="camera_node" name="camera_node" output="screen">
+        <param name="frame_rate" value="30"/>
+    </node>
+</launch>

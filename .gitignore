@@ -1,0 +1,17 @@
+# Build directories
+build/
+devel/
+install/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python
+*.pyc
+__pycache__/
+
+# ROS
+.catkin_workspace
