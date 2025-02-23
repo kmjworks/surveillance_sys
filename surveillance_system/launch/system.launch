@@ -1,0 +1,52 @@
+<launch>
+  <!-- Global system parameters -->
+  <rosparam command="load" file="$(find surveillance_system)/config/system_params.yaml" />
+
+  <!-- Camera Node -->
+  <node pkg="surveillance_system_camera" type="camera_node" name="camera_node" output="screen">
+    <param name="frame_rate" value="30"/>
+  </node>
+
+  <!-- Video Pipeline Node -->
+  <node pkg="surveillance_system_pipeline" type="pipeline_node" name="pipeline_node" output="screen">
+    <param name="device_path"            value="/dev/video0"/>
+    <param name="frame_rate"             value="30"/>  
+    <param name="night_mode"             value="false"/>
+    <param name="show_debug_frames"      value="true"/>
+    <param name="motion_sampling_rate"   value="1"/>
+    <param name="buffer_size"            value="100"/>
+    <param name="output_path"            value="$(env HOME)/surveillance_recordings"/>
+  </node>
+
+  <!-- Motion Detection Node -->
+  <node pkg="surveillance_system_motion_detection" type="motion_detector_node" name="motion_detection_node" output="screen">
+    <param name="engine_file"            value="$(find surveillance_system)/models/yolov8_finetuned_fp16.engine"/>
+    <param name="confidence_threshold"   value="0.45"/>
+    <param name="enable_viz"             value="true"/>
+  </node>
+
+  <!-- Motion Tracking Node -->
+  <node pkg="surveillance_system_motion_tracking" type="motion_tracking_node" name="motion_tracking_node" output="screen">
+    <param name="deepsort_engine_path"   value="$(find surveillance_system)/models/deepsort.engine"/>
+    <param name="deepsort_batch_size"    value="32"/>
+    <param name="deepsort_feature_dim"   value="256"/>
+    <param name="gpu_id"                 value="0"/>
+  </node>
+
+  <!-- Diagnostics Node -->
+  <node pkg="surveillance_system_diagnostics" type="diagnostics_node" name="diagnostics_node" output="screen">
+    <param name="queue_size"            value="50"/>
+    <param name="priority_queue_size"   value="50"/>
+  </node>
+
+  <!-- Capture Node -->
+  <node pkg="surveillance_system_capture" type="capture_node" name="capture_node" output="screen">
+    <param name="save_directory"        value="$(env HOME)/surveillance_captures"/>
+    <param name="image_queue_size"      value="100"/>
+  </node>
+
+  <!-- Visualization (optional) -->
+  <node pkg="rviz" type="rviz" name="rviz"
+        args="-d $(find surveillance_system)/config/pipeline_config.rviz"/>
+        
+</launch>

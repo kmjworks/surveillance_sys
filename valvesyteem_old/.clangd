@@ -1,0 +1,39 @@
+CompileFlags:
+  Add: 
+    - -std=c++17
+    - -Wall
+    - -Wextra
+    - -I/opt/ros/noetic/include
+    - -I/usr/include/opencv4
+    - -I${workspaceFolder}/include
+    - -I${workspaceFolder}/../../devel/include
+    - -I${workspaceFolder}/../..
+    - -I/usr/include/eigen3
+    - -I${workspaceFolder}/../../devel/include/surveillance_system
+    - -I${workspaceFolder}/include/surveillance_system
+    - -I${workspaceFolder}/src/components/utilities/build/
+
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+Diagnostics:
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add: 
+      - modernize*
+      - performance*
+      - bugprone*
+    Remove:
+      - modernize-use-trailing-return-type
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+
+Hover:
+  ShowAKA: Yes
+
+Completion:
+  AllScopes: Yes

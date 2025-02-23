@@ -1,0 +1,5 @@
+Header header
+
+bool storage_critical
+uint64 storage_total_bytes
+uint64 storage_available_bytes

@@ -1,0 +1,79 @@
+image: ros:noetic-ros-base-focal
+
+variables:
+  GIT_STRATEGY: clone
+  CATKIN_WS: "$CI_PROJECT_DIR/catkin_ws"
+  PROJECT_PATH: surveillance_system
+
+stages:
+- build
+- test
+- lint
+- deploy
+
+before_script:
+- sudo apt-get update -y
+- sudo apt-get install -y python3-catkin-tools libopencv-dev python3-opencv
+- sudo apt-get install -y libv4l-dev libeigen3-dev
+- mkdir -p $CATKIN_WS/src
+- cd $CATKIN_WS/src
+- ln -s $CI_PROJECT_DIR ./$PROJECT_PATH
+- cd $CATKIN_WS
+- rosdep update
+- rosdep install --from-paths src --ignore-src -r -y
+
+build:
+  stage: build
+  tags:
+    - ros
+    - noetic
+    - linux
+  script:
+  - source /opt/ros/noetic/setup.bash
+  - catkin init
+  - catkin build -DCMAKE_BUILD_TYPE=Release
+  - source devel/setup.bash
+  artifacts:
+    paths:
+    - $CATKIN_WS/build/
+    - $CATKIN_WS/devel/
+    expire_in: 1 hour
+  cache:
+    paths:
+      - $CATKIN_WS/devel
+      - $CATKIN_WS/build
+
+test:
+  stage: test
+  tags:
+    - ros
+    - noetic
+    - linux
+  dependencies:
+  - build
+  script:
+  - source /opt/ros/noetic/setup.bash
+  - source $CATKIN_WS/devel/setup.bash
+  - cd $CATKIN_WS
+  - catkin run_tests
+  - catkin_test_results
+  artifacts:
+    paths:
+    - $CATKIN_WS/build/test_results/
+    when: always
+    expire_in: 1 week
+  allow_failure: true
+
+lint:
+  stage: test
+  tags:
+    - ros
+    - noetic
+    - linux
+  script:
+  - sudo apt-get install -y python3-pip
+  - pip3 install roslint
+  - source /opt/ros/noetic/setup.bash
+  - cd $CATKIN_WS
+  - catkin build $PROJECT_PATH --no-deps --catkin-make-args roslint
+  allow_failure: true

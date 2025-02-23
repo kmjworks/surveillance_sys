@@ -1,0 +1,15 @@
+video_device: "/dev/video0"
+frame_rate: 30
+night_mode: false
+
+show_debug_frames: true
+buffer_size: 100
+output_path: "$(env HOME)/surveillance_recordings"
+
+motion_threshold: 5.0
+min_motion_area: 50
+motion_publish_rate: 1
+
+camera_retry_count: 3
+camera_retry_delay: 5
+

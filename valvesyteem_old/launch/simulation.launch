@@ -1,0 +1,23 @@
+<launch>
+  <!-- Load parameters -->
+  <rosparam command="load" 
+            file="$(find surveillance_system)/config/simulation_params.yaml" />
+
+  <!-- Camera Node -->
+  <node pkg="surveillance_system" 
+        type="camera_node" 
+        name="cameraNode" 
+        output="screen">
+      <param name="frame_width" value="1920"/>
+      <param name="frame_height" value="1080"/>
+      <param name="frame_rate" value="30"/>
+  </node>
+
+
+  <!-- Image Visualization Nodes -->
+  <node pkg="image_view" 
+        type="image_view" 
+        name="raw_view">
+      <remap from="image" to="/cameraNode/image_raw"/>
+  </node>
+</launch>

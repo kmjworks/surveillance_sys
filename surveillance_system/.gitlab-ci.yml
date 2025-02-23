@@ -1,0 +1,52 @@
+image: ros:noetic
+
+variables:
+  ROS_DISTRO: noetic
+  DEBIAN_FRONTEND: noninteractive
+  CATKIN_WS: /catkin_ws
+
+stages:
+  - build
+  - test
+
+before_script:
+  - apt-get update
+  - apt-get install -y python3-catkin-tools python3-pip libopencv-dev libv4l-dev
+  - pip3 install -U catkin_pkg rospkg empy
+  - mkdir -p $CATKIN_WS/src
+  - cd $CATKIN_WS
+  - cp -r /builds/$CI_PROJECT_PATH/. $CATKIN_WS/src/
+  - source /opt/ros/$ROS_DISTRO/setup.bash
+  - catkin init
+  - catkin config --extend /opt/ros/$ROS_DISTRO
+  - catkin config --cmake-args -DCMAKE_BUILD_TYPE=Release
+  - catkin config --install
+
+build:
+  stage: build
+  script:
+    - cd $CATKIN_WS
+    - catkin build surveillance_system_msgs
+    - catkin build surveillance_system_common
+    - catkin build surveillance_system_camera
+    - catkin build surveillance_system_capture
+    - catkin build surveillance_system_diagnostics
+    - catkin build surveillance_system_motion_detection --no-deps
+    - catkin build surveillance_system_motion_tracking --no-deps
+    - catkin build surveillance_system_pipeline
+    - catkin build surveillance_system
+  artifacts:
+    paths:
+      - $CATKIN_WS/build/
+      - $CATKIN_WS/devel/
+      - $CATKIN_WS/logs/
+
+test:
+  stage: test
+  script:
+    - cd $CATKIN_WS
+    - source $CATKIN_WS/devel/setup.bash
+    - catkin run_tests
+    - catkin_test_results
+  dependencies:
+    - build

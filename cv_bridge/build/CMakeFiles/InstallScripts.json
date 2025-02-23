@@ -1,0 +1,13 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/kmj/vision_opencv/cv_bridge/build/cmake_install.cmake",
+		"/home/kmj/vision_opencv/cv_bridge/build/gtest/cmake_install.cmake",
+		"/home/kmj/vision_opencv/cv_bridge/build/gtest/googlemock/cmake_install.cmake",
+		"/home/kmj/vision_opencv/cv_bridge/build/gtest/googletest/cmake_install.cmake",
+		"/home/kmj/vision_opencv/cv_bridge/build/python/cmake_install.cmake",
+		"/home/kmj/vision_opencv/cv_bridge/build/src/cmake_install.cmake",
+		"/home/kmj/vision_opencv/cv_bridge/build/test/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
