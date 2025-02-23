@@ -2,14 +2,14 @@
 #include <sensor_msgs/Image.h>
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
-#include "../simulation/frame_generator.hpp"
+#include "../simulation/mock_frames.hpp"
 
 class CameraNode
 {
     private:
         ros::NodeHandle nh_; 
         image_transport::ImageTransport it_; 
-        image_transport::Publisher image_pub;
+        image_transport::Publisher image_pub_;
         ros::Timer timer_;
         MockFrames frame_generator_;
 
@@ -56,6 +56,6 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "camera_node");
     CameraNode node; 
-    node.run(); 
+    ros::spin();
     return 0; 
 }

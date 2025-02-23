@@ -28,7 +28,7 @@ class MockFrames {
 
         void resetObject()
         {
-            std::uniform_real_distribution<float> pos_dist_x(0, width);
+            std::uniform_real_distribution<float> pos_dist_x(0, width_);
             std::uniform_real_distribution<float> pos_dist_y(0, height_);
 
             object_position_ = cv::Point2f(pos_dist_x(rng_), pos_dist_y(rng_));
@@ -57,6 +57,6 @@ class MockFrames {
 
             return frame; 
         }
-}
+};
 
 #endif // MOCK_FRAMES_HPP
