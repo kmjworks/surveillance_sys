@@ -11,6 +11,12 @@
         <param name="frame_rate" value="30"/>
     </node>
 
+    <!-- Motion Detector Node -->
+    <node pkg="surveillance_system", type="motion_detector_node"
+        name="motion_detector_node" output="screen">
+        <param name="detection_threshold" value="30.0" />
+    </node>
+
     <!-- Image viewer for visualization -->
     <node pkg="image_view" type="image_view" name="image_view">
         <remap from="image" to="/camera_node/image_raw"/>
