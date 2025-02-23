@@ -1,0 +1,34 @@
+CompileFlags:
+  Add: 
+    - -std=c++14
+    - -Wall
+    - -Wextra
+    - -I/opt/ros/noetic/include
+    - -I/usr/include/opencv4
+    - -I${workspaceFolder}/include
+    - -I${workspaceFolder}/../../devel/include
+    - -I${workspaceFolder}/../..
+    - -I/usr/include/eigen3
+
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+Diagnostics:
+  ClangTidy:
+    Add: 
+      - modernize*
+      - performance*
+      - readability*
+      - bugprone*
+    Remove:
+      - modernize-use-trailing-return-type
+      - readability-named-parameter
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+
+Hover:
+  ShowAKA: Yes
