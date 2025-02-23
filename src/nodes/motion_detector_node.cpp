@@ -20,7 +20,7 @@ class MotionDetectorNode
         uint32_t event_counter_;
 
     public:
-        MotionDetectorNode() : nh_("~"), first_frame_(true)
+        MotionDetectorNode() : nh_("~"), it_(nh_), first_frame_(true), event_counter_(0)
         {
             nh_.param("detection_threshold", detection_threshold_, 30.0);
 
@@ -39,8 +39,8 @@ class MotionDetectorNode
         void imageCallback(const sensor_msgs::ImageConstPtr& msg)
         {
             try {
-                cv::Mat current_frame = cv::bridge::toCvShare(msg, "bgr8")->image;
-                cv::Mat debug_frame == curret_frame.clone();
+                cv::Mat current_frame = cv_bridge::toCvShare(msg, "bgr8")->image;
+                cv::Mat debug_frame = current_frame.clone();
                 cv::Mat current_gray;
 
 
@@ -57,7 +57,8 @@ class MotionDetectorNode
                 cv::absdiff(current_gray, previous_frame_, frame_diff);
 
                 cv::Mat motion_mask;
-                cv::threshold(frame_diff, motion_mask, detection_threshold_, 255, cv::THRESH_BINARY);
+                cv::threshold(frame_diff, motion_mask, detection_threshold_, 
+                    255, cv::THRESH_BINARY);
                 
                 /*
                     Contours of motion regions
@@ -66,9 +67,10 @@ class MotionDetectorNode
                 cv::findContours(motion_mask, contours, cv::RETR_EXTERNAL,
                                 cv::CHAIN_APPROX_SIMPLE);
 
-                for(const auto& contour :: contours)
+                for(const auto& contour : contours)
                 {
-                    if(cv::contourArea(contour) > 100)
+                    float area = cv::contourArea(contour);
+                    if(area > 100)
                     {
                         cv::Rect bbox = cv::boundingRect(contour);
                         cv::Moments moments = cv::moments(contour);
@@ -79,14 +81,25 @@ class MotionDetectorNode
 
                         event.header = msg->header;
                         event.event_id = ++event_counter_;
+                        event.location.x = moments.m10 / moments.m00; 
+                        event.location.y = moments.m01 / moments.m00;
+                        event.area = area; 
+                        event.confidence = area / (current_frame.rows * current_frame.cols);
+
+                        event_pub_.publish(event);
                     }
                 }
+
+                sensor_msgs::ImagePtr debug_msg =
+                    cv_bridge::CvImage(msg->header, "bgr8", debug_frame).toImageMsg();
+
+                debug_pub_.publish(debug_msg);
 
                 previous_frame_ = current_gray.clone();
             } 
             catch (cv_bridge::Exception& e)
             {
-                ROS_ERROR("ROS Image message conversion to OpenCV format failed: %s", 
+                ROS_ERROR("ROS CV Bridge failed: %s", 
                     e.what());
             }
         }

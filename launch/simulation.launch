@@ -1,24 +1,45 @@
 <launch>
-    <!-- Load simulation parameters -->
+    <!-- Load parameters -->
     <rosparam command="load" 
               file="$(find surveillance_system)/config/simulation_params.yaml" />
 
     <!-- Camera Node -->
-    <node pkg="surveillance_system" type="camera_node" 
-          name="camera_node" output="screen">
+    <node pkg="surveillance_system" 
+          type="camera_node" 
+          name="camera_node" 
+          output="screen">
         <param name="frame_width" value="1920"/>
         <param name="frame_height" value="1080"/>
         <param name="frame_rate" value="30"/>
     </node>
 
     <!-- Motion Detector Node -->
-    <node pkg="surveillance_system", type="motion_detector_node"
-        name="motion_detector_node" output="screen">
-        <param name="detection_threshold" value="30.0" />
+    <node pkg="surveillance_system" 
+          type="motion_detector_node" 
+          name="motion_detector_node" 
+          output="screen">
+        <param name="detection_threshold" value="30.0"/>
     </node>
 
-    <!-- Image viewer for visualization -->
-    <node pkg="image_view" type="image_view" name="image_view">
+    <!-- Capture Manager Node -->
+    <node pkg="surveillance_system" 
+          type="capture_manager_node" 
+          name="capture_manager_node" 
+          output="screen">
+        <param name="buffer_size" value="30"/>
+        <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
+    </node>
+
+    <!-- Image isualization Nodes -->
+    <node pkg="image_view" 
+          type="image_view" 
+          name="raw_view">
         <remap from="image" to="/camera_node/image_raw"/>
+    </node>
+    
+    <node pkg="image_view" 
+          type="image_view" 
+          name="debug_view">
+        <remap from="image" to="/motion_detector_node/debug_image"/>
     </node>
 </launch>

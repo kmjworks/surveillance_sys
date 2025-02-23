@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   sensor_msgs
   std_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -50,11 +51,16 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  MotionEvent.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -143,6 +149,9 @@ target_link_libraries(motion_detector_node
 
 add_executable(camera_node src/nodes/camera_node.cpp)
 target_link_libraries(camera_node ${catkin_LIBRARIES})
+
+add_executable(capture_manager_node src/nodes/capture_manager_node.cpp)
+target_link_libraries(capture_manager_node ${catkin_LIBRARIES})
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use

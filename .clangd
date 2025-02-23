@@ -9,12 +9,15 @@ CompileFlags:
     - -I${workspaceFolder}/../../devel/include
     - -I${workspaceFolder}/../..
     - -I/usr/include/eigen3
+    - -I${workspaceFolder}/../../devel/include/surveillance_system
+    - -I${workspaceFolder}/include/surveillance_system
 
 Index:
   Background: Build
   StandardLibrary: Yes
 
 Diagnostics:
+  UnusedIncludes: Strict
   ClangTidy:
     Add: 
       - modernize*
@@ -23,7 +26,6 @@ Diagnostics:
       - bugprone*
     Remove:
       - modernize-use-trailing-return-type
-      - readability-named-parameter
 
 InlayHints:
   Enabled: Yes
@@ -32,3 +34,6 @@ InlayHints:
 
 Hover:
   ShowAKA: Yes
+
+Completion:
+  AllScopes: Yes
