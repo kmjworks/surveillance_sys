@@ -23,8 +23,8 @@
 
     <!-- Capture Manager Node -->
     <node pkg="surveillance_system" 
-          type="capture_manager_node" 
-          name="capture_manager_node" 
+          type="video_pipeline_node" 
+          name="video_pipeline_node" 
           output="screen">
         <param name="buffer_size" value="30"/>
         <param name="output_path" value="$(env HOME)/surveillance_recordings"/>

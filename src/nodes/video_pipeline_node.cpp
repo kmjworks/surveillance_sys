@@ -107,7 +107,7 @@ class RecordingManagerNode
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "recording_manager_node");
+    ros::init(argc, argv, "video_pipeline_node");
     RecordingManagerNode manager;
     ros::spin();
     return 0;

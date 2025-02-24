@@ -150,8 +150,8 @@ target_link_libraries(motion_detector_node
 add_executable(camera_node src/nodes/camera_node.cpp)
 target_link_libraries(camera_node ${catkin_LIBRARIES})
 
-add_executable(capture_manager_node src/nodes/capture_manager_node.cpp)
-target_link_libraries(capture_manager_node ${catkin_LIBRARIES})
+add_executable(video_pipeline_node src/nodes/video_pipeline_node.cpp)
+target_link_libraries(video_pipeline_node ${catkin_LIBRARIES})
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
