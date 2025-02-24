@@ -6,6 +6,7 @@ install/
 # IDE files
 .vscode/
 .idea/
+.cache/
 *.swp
 *~
 
