@@ -38,7 +38,6 @@ build:
     - $CATKIN_WS/build/
     - $CATKIN_WS/devel/
     expire_in: 1 hour
-  timeout: 10m
   cache:
     paths:
       - $CATKIN_WS/devel
