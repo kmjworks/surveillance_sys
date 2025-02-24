@@ -2,7 +2,7 @@ image: ros:noetic-ros-base-focal
 
 variables:
   GIT_STRATEGY: clone
-  CATKIN_WS: /catkin_ws
+  CATKIN_WS: ~/catkin_ws
   PROJECT_PATH: surveillance_system
 
 stages:
@@ -35,8 +35,8 @@ build:
   - source devel/setup.bash
   artifacts:
     paths:
-    - $CATKIN_WS/build/
-    - $CATKIN_WS/devel/
+    - ~/catkin_ws/build/
+    - ~/catkin_ws/devel/
     expire_in: 1 hour
   cache:
     paths:
