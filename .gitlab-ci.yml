@@ -12,9 +12,9 @@ stages:
 - deploy
 
 before_script:
-- apt-get update -y
-- apt-get install -y python3-catkin-tools libopencv-dev python3-opencv
-- apt-get install -y libv4l-dev libeigen3-dev
+- sudo apt-get update -y
+- sudo apt-get install -y python3-catkin-tools libopencv-dev python3-opencv
+- sudo apt-get install -y libv4l-dev libeigen3-dev
 - mkdir -p $CATKIN_WS/src
 - cd $CATKIN_WS/src
 - ln -s $CI_PROJECT_DIR ./$PROJECT_PATH
