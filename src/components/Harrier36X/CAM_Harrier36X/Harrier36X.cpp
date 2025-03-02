@@ -81,4 +81,14 @@ bool Harrier36X::processCommandResponse(const ViscaResponse& response) {
     return true;
 }
 
+void Harrier36X::setRuntimeParameters() {
+    RuntimeCameraParameters params = getRuntimeParameters();
+    params.backlightEnabled = Harrier36X::BacklightMode::SPOT;
+    params.dayNightMode = Harrier36X::DayNightMode::AUTO;
+    params.exposureMode = Harrier36X::ExposureMode::AUTO;
+    params.zoomDirection = Harrier36X::ZoomDirection::IN;
+}
+
+RuntimeCameraParameters Harrier36X::getRuntimeParameters() { return runtimeParams; }
+
 }  // namespace harrier
