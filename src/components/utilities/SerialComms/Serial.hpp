@@ -7,6 +7,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace harrier {
@@ -15,9 +16,6 @@ public:
     explicit SerialPortError(const std::string& message) : std::runtime_error(message) {}
 };
 
-/**
- * @brief Configuration for serial port
- */
 struct SerialPortConfig {
     int baudRate = 9600;
     int dataBits = 8;
@@ -48,7 +46,7 @@ public:
 
     std::size_t write(const std::vector<uint8_t>& data);
     std::vector<uint8_t> read(std::size_t maxBytes);
-    void flush();
+    void flush() const;
 
     std::vector<uint8_t> readUntil(uint8_t delimiter, std::size_t maxBytes = 1024);
     void setReadCallback(ReadCallback callback, std::size_t minBytes);
