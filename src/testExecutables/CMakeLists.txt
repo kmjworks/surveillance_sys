@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.10)
-project(SerialCommsUtility)
 
 set(CMAKE_CXX_STANDARD_REQUIRED 17)
 
@@ -12,11 +11,10 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt)
 
 FIND_PACKAGE(Boost COMPONENTS program_options REQUIRED)
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 message(STATUS "Boost version: ${Boost_VERSION}")
 
-include_directories("../SerialComms")
-add_executable(serialUtils ${CMAKE_SOURCE_DIR} Serial.cpp)
-target_link_libraries(serialUtils fmt::fmt ${Boost_LIBRARIES})
+include_directories(${Boost_INCLUDE_DIR} "../components/Harrier36X/VISCA" "../components/Harrier36X/CAM_Harrier36X")
 
-target_compile_features(serialUtils PRIVATE cxx_std_17)
+add_executable(harrierBringUpTest "Harrier36X/harrierBringup/main.cpp")
+target_link_libraries(harrierBringUpTest harrierUtils)
+target_compile_features(harrierBringUpTest PRIVATE cxx_std_17)
