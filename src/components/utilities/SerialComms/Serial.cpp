@@ -9,24 +9,25 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include <atomic>
-#include <condition_variable>
-#include <iostream>
-#include <mutex>
-#include <thread>
-#include <vector>
+#include <boost/atomic.hpp>
+#include <boost/bind.hpp>
+#include <boost/make_shared.hpp>
+#include <boost/system/error_code.hpp>
+#include <boost/thread.hpp>
+#include <boost/thread/condition_variable.hpp>
+#include <boost/thread/mutex.hpp>
 
 namespace harrier {
 struct Serial::Impl {
     std::string devicePath;
     SerialPortConfig config;
     int fd = -1;
-    std::atomic<bool> isRunning{false};
-    std::thread readThread;
+    boost::atomic<bool> isRunning{false};
+    boost::thread readThread;
     ReadCallback readCallback;
     std::size_t minReadBytes = 1;
-    std::mutex mutex;
-    std::condition_variable cv;
+    boost::mutex mutex;
+    boost::condition_variable cv;
 
     Impl(const std::string& path, const SerialPortConfig& cfg) : devicePath(path), config(cfg) {}
 
@@ -40,7 +41,7 @@ struct Serial::Impl {
 
     void startReadThread() {
         isRunning = true;
-        readThread = std::thread([this]() { readThreadFunc(); });
+        readThread = boost::thread(boost::bind(&Impl::readThreadFunc, this));
     }
 
     void stopReadThread() {
@@ -62,12 +63,14 @@ struct Serial::Impl {
             if (ret < 0) {
                 if (errno == EINTR)
                     continue;
-                readCallback({}, std::error_code(errno, std::system_category()));
+                readCallback({},
+                             boost::system::error_code(errno, boost::system::system_category()));
                 break;
             } else if (ret > 0 && (pfd.revents & POLLIN)) {
                 int bytesAvailable;
                 if (::ioctl(fd, FIONREAD, &bytesAvailable) < 0) {
-                    readCallback({}, std::error_code(errno, std::system_category()));
+                    readCallback(
+                        {}, boost::system::error_code(errno, boost::system::system_category()));
                     continue;
                 }
 
@@ -76,10 +79,11 @@ struct Serial::Impl {
                     ssize_t bytesRead = ::read(fd, buffer.data(), bytesAvailable);
 
                     if (bytesRead < 0) {
-                        readCallback({}, std::error_code(errno, std::system_category()));
+                        readCallback(
+                            {}, boost::system::error_code(errno, boost::system::system_category()));
                     } else if (bytesRead > 0) {
                         buffer.resize(bytesRead);
-                        readCallback(buffer, std::error_code());
+                        readCallback(buffer, boost::system::error_code());
                     }
                 }
             }
@@ -87,14 +91,21 @@ struct Serial::Impl {
     }
 };
 
+Serial::Serial(const std::string& devicePath, int baudRate)
+    : Serial(devicePath, [baudRate]() {
+          SerialPortConfig config;
+          config.baudRate = baudRate;
+          return config;
+      }()) {}
+
 Serial::Serial(const std::string& devicePath, const SerialPortConfig& config)
-    : ptrImpl(std::make_unique<Impl>(devicePath, config)) {}
+    : ptrImpl(new Impl(devicePath, config)) {}
 
 Serial::~Serial() { close(); }
 
-std::shared_ptr<Serial> Serial::create(const std::string& devicePath,
-                                       const SerialPortConfig& config) {
-    std::shared_ptr<Serial> port(new Serial(devicePath, config));
+boost::shared_ptr<Serial> Serial::create(const std::string& devicePath,
+                                         const SerialPortConfig& config) {
+    boost::shared_ptr<Serial> port(new Serial(devicePath, config));
     port->open();
     return port;
 }
@@ -105,7 +116,7 @@ void Serial::open() {
 
     ptrImpl->fd = ::open(ptrImpl->devicePath.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (ptrImpl->fd < 0) {
-        throw SerialPortError("Failed to open device port " + ptrImpl->devicePath + ":" +
+        throw SerialPortError("Failed to open device port " + ptrImpl->devicePath + ": " +
                               strerror(errno));
     }
 
@@ -133,8 +144,12 @@ std::size_t Serial::write(const std::vector<uint8_t>& data) {
     FD_ZERO(&wfds);
     FD_SET(ptrImpl->fd, &wfds);
 
-    tval.tv_sec = ptrImpl->config.writeTimeout.count() / 1000;
-    tval.tv_usec = (ptrImpl->config.writeTimeout.count() % 1000) * 1000;
+    auto timeout_ms =
+        boost::chrono::duration_cast<boost::chrono::milliseconds>(ptrImpl->config.writeTimeout)
+            .count();
+
+    tval.tv_sec = timeout_ms / 1000;
+    tval.tv_usec = (timeout_ms % 1000) * 1000;
 
     int ret = select(ptrImpl->fd + 1, nullptr, &wfds, nullptr, &tval);
     if (ret < 0) {
@@ -164,8 +179,12 @@ std::vector<uint8_t> Serial::read(std::size_t maxBytes) {
     FD_ZERO(&rfds);
     FD_SET(ptrImpl->fd, &rfds);
 
-    tval.tv_sec = ptrImpl->config.readTimeout.count() / 1000;
-    tval.tv_usec = (ptrImpl->config.readTimeout.count() % 1000) * 1000;
+    auto timeout_ms =
+        boost::chrono::duration_cast<boost::chrono::milliseconds>(ptrImpl->config.writeTimeout)
+            .count();
+
+    tval.tv_sec = timeout_ms / 1000;
+    tval.tv_usec = (timeout_ms % 1000) * 1000;
 
     int ret = select(ptrImpl->fd + 1, &rfds, nullptr, nullptr, &tval);
     if (ret < 0) {
@@ -193,10 +212,14 @@ std::vector<uint8_t> Serial::readUntil(uint8_t delimiter, std::size_t maxBytes) 
     }
 
     std::vector<uint8_t> result;
-    auto timeout = std::chrono::steady_clock::now() + ptrImpl->config.readTimeout;
+    auto timeout =
+        boost::chrono::steady_clock::now() +
+        boost::chrono::milliseconds(
+            boost::chrono::duration_cast<boost::chrono::milliseconds>(ptrImpl->config.readTimeout)
+                .count());
 
     while (result.size() < maxBytes) {
-        if (std::chrono::steady_clock::now() > timeout) {
+        if (boost::chrono::steady_clock::now() > timeout) {
             if (result.empty()) {
                 throw SerialPortError("Read timeout");
             }

@@ -11,6 +11,7 @@ CompileFlags:
     - -I/usr/include/eigen3
     - -I${workspaceFolder}/../../devel/include/surveillance_system
     - -I${workspaceFolder}/include/surveillance_system
+    - -I${workspaceFolder}/src/components/utilities/build/
 
 Index:
   Background: Build
