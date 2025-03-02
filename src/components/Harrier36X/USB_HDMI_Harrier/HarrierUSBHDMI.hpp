@@ -50,6 +50,16 @@ public:
         return boost::shared_ptr<HarrierUSBHDMI>(new HarrierUSBHDMI(std::move(camera)));
     }
 
+    bool enableTestPattern(bool enable);
+    bool resetInterfaceBoard();
+    bool setVideoFormat(VideoFormat format);
+    bool setLvdsMode(LvdsMode mode);
+    boost::shared_ptr<Harrier36X> getCamera() const { return camera; }
+    boost::optional<std::string> getFirmwareVersion();
+    boost::optional<uint8_t> getBoardHealth();
+    boost::optional<int> getBoardTemperature();
+    boost::optional<std::string> getLastError() const;
+
     ~HarrierUSBHDMI() = default;
 
 private:
