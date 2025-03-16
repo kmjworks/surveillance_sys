@@ -13,9 +13,9 @@ class CameraNode
         ros::Timer timer_;
         MockFrames frame_generator_;
 
-        int frame_width_;
+        int frame_with_;
         int frame_height_;
-        int frame_rate_;
+        int frame_ratde_;
 
     public: 
         CameraNode() : nh_("~"), it_(nh_) 

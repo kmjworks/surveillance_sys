@@ -149,18 +149,20 @@ FetchContent_MakeAvailable(fmt)
 # # Declare a C++ executable
 # # With catkin_make all packages are built within a single CMake context
 # # The recommended prefix ensures that target names across packages don't collide
-add_executable(motion_detector_node src/nodes/motion_detector_node.cpp)
-target_link_libraries(motion_detector_node
+add_executable(motion_detector_node src/nodes/motionDetectionNode/motionDetectionNode.cpp)
+target_link_libraries(motion_edtector_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   fmt::fmt
 )
 
-add_executable(camera_node src/nodes/camera_node.cpp)
+add_executable(camera_node src/nodes/cameraNode/cameraNode.cpp)
 target_link_libraries(camera_node ${catkin_LIBRARIES})
 
-add_executable(video_pipeline_node src/nodes/video_pipeline_node.cpp)
+add_executable(video_pipeline_node src/nodes/pipelineNode/pipelineNode.cpp)
 target_link_libraries(video_pipeline_node ${catkin_LIBRARIES})
+
+add_executable(diagnostics_node src/nodes/diagnosticsNode/diagnosticsNode.cpp)
 
 # # Rename C++ executable without prefix
 # # The above recommended prefix causes long target names, the following renames the
