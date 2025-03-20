@@ -17,6 +17,11 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GST_APP REQUIRED gstreamer-app-1.0)
+
+
 # # System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -126,6 +131,8 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${GSTREAMER_INCLUDE_DIRS}
+  ${GST_APP_INCLUDE_DIRS}
 )
 
 include(FetchContent)
@@ -160,7 +167,7 @@ add_executable(camera_node src/nodes/cameraNode/cameraNode.cpp)
 target_link_libraries(camera_node ${catkin_LIBRARIES})
 
 add_executable(video_pipeline_node src/nodes/pipelineNode/pipelineNode.cpp)
-target_link_libraries(video_pipeline_node ${catkin_LIBRARIES})
+target_link_libraries(video_pipeline_node ${catkin_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GST_APP_LIBRARIES})
 
 add_executable(diagnostics_node src/nodes/diagnosticsNode/diagnosticsNode.cpp)
 
