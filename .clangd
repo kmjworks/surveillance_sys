@@ -1,6 +1,6 @@
 CompileFlags:
   Add: 
-    - -std=c++14
+    - -std=c++17
     - -Wall
     - -Wextra
     - -I/opt/ros/noetic/include
@@ -23,7 +23,6 @@ Diagnostics:
     Add: 
       - modernize*
       - performance*
-      - readability*
       - bugprone*
     Remove:
       - modernize-use-trailing-return-type

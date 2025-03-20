@@ -1,42 +1,42 @@
-#include <ros/ros.h> 
-#include <surveillance_system/MotionEvent.h>
-#include <sensor_msgs/Image>
 #include <cv_bridge/cv_bridge.h>
-#include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
-#include <string>
+#include <gst/gst.h>
+#include <ros/ros.h>
+#include <sensor_msgs/Image.h>
+#include <surveillance_system/motion_event.h>
 #include <mutex>
 #include <queue>
+#include <string>
 
-class pipelineBase {
-    private:
+class PipelineBase {
+private:
+    struct elements {
+        GstElement *pipeline;
+        GstElement *appsrc;
+        GstElement *videoconvert;
+        GstElement *encoder;
+        GstElement *muxer;
+        GstElement *filesink;
+    };
 
-        struct baseElements {
-            GstElement *pipeline; 
-            GstElement *appsrc; 
-            GstElement *videoconvert;
-            GstElement *encoder;
-            GstElement *muxer;
-            GstElement *filesink;
-        };
-        
+    elements baseElements;
+    bool pipelineRunning;
+    std::mutex pipelineMtx;
 
-        bool pipelineRunning;
-        std::mutex pipelineMtx;
-        
-        std::queue<GstBuffer*> frameBuffer;
+    std::queue<GstBuffer *> frameBuffer;
 
-        int bufferSize;
-        unsigned int width, height; 
-    
-    public:
-        pipelineBase(int bufferSize, unsigned int width, unsigned int height);
-        ~pipelineBase();
+    int bufferSize;
+    unsigned int width, height;
 
-        bool initPipeline(const std::string& sinkPath);
-        bool startCapture(void);
-        void stopPipeline(void);
+    bool recording;
 
-        void pushFrame(const cv::Mat &frame);
+public:
+    PipelineBase(int bufferSize, unsigned int width, unsigned int height);
+    ~PipelineBase();
 
-}
+    bool initPipeline(const std::string &sinkPath);
+    bool startCapture();
+    void stopPipeline();
+
+    void pushFrame(const cv::Mat &frame);
+};

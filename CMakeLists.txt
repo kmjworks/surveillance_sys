@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(surveillance_system)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # # Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -17,47 +18,17 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GST_APP REQUIRED gstreamer-app-1.0)
 
 
-# # System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
 
-# # Uncomment this if the package has a setup.py. This macro ensures
-# # modules and global scripts declared therein get installed
-# # See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
-# catkin_python_setup()
-
-# ###############################################
-# # Declare ROS messages, services and actions ##
-# ###############################################
-
-# # To declare and build messages, services or actions from within this
-# # package, follow these steps:
-# # * Let MSG_DEP_SET be the set of packages whose message types you use in
-# #   your messages/services/actions (e.g. std_msgs, actionlib_msgs, ...).
-# # * In the file package.xml:
-# #   * add a build_depend tag for "message_generation"
-# #   * add a build_depend and a exec_depend tag for each package in MSG_DEP_SET
-# #   * If MSG_DEP_SET isn't empty the following dependency has been pulled in
-# #     but can be declared for certainty nonetheless:
-# #     * add a exec_depend tag for "message_runtime"
-# # * In this file (CMakeLists.txt):
-# #   * add "message_generation" and every package in MSG_DEP_SET to
-# #     find_package(catkin REQUIRED COMPONENTS ...)
-# #   * add "message_runtime" and every package in MSG_DEP_SET to
-# #     catkin_package(CATKIN_DEPENDS ...)
-# #   * uncomment the add_*_files sections below as needed
-# #     and list every .msg/.srv/.action file to be processed
-# #   * uncomment the generate_messages entry below
-# #   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
-
-# # Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  MotionEvent.msg
+  motion_event.msg
+  pipeline_metrics.msg
 )
 
 generate_messages(
@@ -156,8 +127,8 @@ FetchContent_MakeAvailable(fmt)
 # # Declare a C++ executable
 # # With catkin_make all packages are built within a single CMake context
 # # The recommended prefix ensures that target names across packages don't collide
-add_executable(motion_detector_node src/nodes/motionDetectionNode/motionDetectionNode.cpp)
-target_link_libraries(motion_edtector_node
+add_executable(motion_detection_node src/nodes/motionDetectionNode/motionDetectionNode.cpp src/nodes/motionDetectionNode/main.cpp)
+target_link_libraries(motion_detection_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   fmt::fmt
@@ -166,10 +137,10 @@ target_link_libraries(motion_edtector_node
 add_executable(camera_node src/nodes/cameraNode/cameraNode.cpp)
 target_link_libraries(camera_node ${catkin_LIBRARIES})
 
-add_executable(video_pipeline_node src/nodes/pipelineNode/pipelineNode.cpp src/nodes/pipelineNode/components/pipeline.cpp)
+add_executable(video_pipeline_node src/nodes/pipelineNode/pipelineNode.cpp src/nodes/pipelineNode/components/pipeline.cpp src/nodes/pipelineNode/main.cpp)
 target_link_libraries(video_pipeline_node ${catkin_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GST_APP_LIBRARIES})
 
-add_executable(diagnostics_node src/nodes/diagnosticsNode/diagnosticsNode.cpp)
+add_executable(diagnostics_node src/nodes/diagnosticsNode/diagnosticsNode.cpp src/nodes/diagnosticsNode/main.cpp)
 
 # # Rename C++ executable without prefix
 # # The above recommended prefix causes long target names, the following renames the
