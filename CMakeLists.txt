@@ -166,7 +166,7 @@ target_link_libraries(motion_edtector_node
 add_executable(camera_node src/nodes/cameraNode/cameraNode.cpp)
 target_link_libraries(camera_node ${catkin_LIBRARIES})
 
-add_executable(video_pipeline_node src/nodes/pipelineNode/pipelineNode.cpp)
+add_executable(video_pipeline_node src/nodes/pipelineNode/pipelineNode.cpp src/nodes/pipelineNode/components/pipeline.cpp)
 target_link_libraries(video_pipeline_node ${catkin_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GST_APP_LIBRARIES})
 
 add_executable(diagnostics_node src/nodes/diagnosticsNode/diagnosticsNode.cpp)
