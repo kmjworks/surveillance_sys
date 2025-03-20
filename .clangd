@@ -1,6 +1,6 @@
 CompileFlags:
   Add: 
-    - -std=c++14
+    - -std=c++17
     - -Wall
     - -Wextra
     - -I/opt/ros/noetic/include
@@ -11,6 +11,7 @@ CompileFlags:
     - -I/usr/include/eigen3
     - -I${workspaceFolder}/../../devel/include/surveillance_system
     - -I${workspaceFolder}/include/surveillance_system
+    - -I${workspaceFolder}/src/components/utilities/build/
 
 Index:
   Background: Build
@@ -22,7 +23,6 @@ Diagnostics:
     Add: 
       - modernize*
       - performance*
-      - readability*
       - bugprone*
     Remove:
       - modernize-use-trailing-return-type

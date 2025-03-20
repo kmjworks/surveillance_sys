@@ -5,8 +5,8 @@
 
     <!-- Camera Node -->
     <node pkg="surveillance_system" 
-          type="camera_node" 
-          name="camera_node" 
+          type="cameraNode" 
+          name="cameraNode" 
           output="screen">
         <param name="frame_width" value="1920"/>
         <param name="frame_height" value="1080"/>
@@ -15,16 +15,16 @@
 
     <!-- Motion Detector Node -->
     <node pkg="surveillance_system" 
-          type="motion_detector_node" 
-          name="motion_detector_node" 
+          type="motionDetectionNode" 
+          name="motionDetectionNode" 
           output="screen">
         <param name="detection_threshold" value="30.0"/>
     </node>
 
     <!-- Capture Manager Node -->
     <node pkg="surveillance_system" 
-          type="video_pipeline_node" 
-          name="video_pipeline_node" 
+          type="pipelineNode" 
+          name="pipelineNode" 
           output="screen">
         <param name="buffer_size" value="30"/>
         <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
