@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <string>
+#include "ros/node_handle.h"
 
 using DetectionEventCount = int64_t;
 using MotionEventCount = int64_t;
