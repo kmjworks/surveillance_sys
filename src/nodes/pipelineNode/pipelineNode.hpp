@@ -10,6 +10,8 @@
 #include "ros/node_handle.h"
 #include "ros/subscriber.h"
 
+#include "components/pipeline.hpp"
+
 #include <sensor_msgs/Image.h>
 #include <surveillance_system/motion_event.h>
 
@@ -17,23 +19,38 @@ namespace internal {
 struct ROSInterface {
     ros::Subscriber sub_motionEvents;
     ros::Subscriber sub_rawImageData;
+    ros::Publisher pub_processedFrames;
+    ros::Publisher pub_motionEvents;
 };
+
+struct MotionDetectionThresholds {
+    double motionThreshold; 
+    int minimalMotionArea;
+    bool motionDetected;
+};
+
+struct MotionDetectionInternals {
+    bool showDebugFrames; 
+    bool videoWriterStatus;
+    std::string outputPath;
+
+    std::queue<cv::Mat> frameBuffer;
+    cv::Ptr<cv::BackgroundSubtractorMOG2> backgroundSubtractor;
+};
+
 }  // namespace internal
 
-class PipelineNode {
+class PipelineNode : public PipelineBase {
 public:
-    PipelineNode(ros::NodeHandle nh);
+    PipelineNode(ros::NodeHandle& nh);
     cv::VideoWriter videoWriterForSimulation;
-    internal::ROSInterface ROSInternalInterface;
 
 private:
     ros::NodeHandle nh;
-    bool videoWriterStatus;
-    int videoWriterBufferSize;
-
-    std::string outputPath;
+    internal::ROSInterface rosInterface;
+    internal::MotionDetectionThresholds detectionThresholds;
+    internal::MotionDetectionInternals detectionInternalState;
     ros::Time lastMotionEventRegistered;
-    std::queue<cv::Mat> frameBuffer;
 
     void videoWriterRecording(bool start, uint32_t motionEventID);
     void cb_imageData(const sensor_msgs::ImageConstPtr& msg);
