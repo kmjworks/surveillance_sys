@@ -28,7 +28,7 @@ class HarrierCaptureSrc {
 
         std::string getFrameFormat() const;
 
-        bool isNightModeDetected();
+        bool isNightModeDetected() const;
 
     private:
         std::string devicePath;
@@ -39,6 +39,9 @@ class HarrierCaptureSrc {
 
         std::atomic<bool> isInitialized;
         std::atomic<bool> isNightMode;
+
+        std::mutex frameSampleMtx;
+        GstSample* latestFrame;
 
         bool buildPipeline();
         void releasePipelineResources();
