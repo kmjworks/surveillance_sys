@@ -18,15 +18,14 @@ namespace pipeline {
     bool HarrierCaptureSrc::initializeRawSrcForCapture() {
         ROS_INFO("Initializing Harrier camera for capture.");
 
-        for(harrierState.retryCount = 0; harrierState.retryCount < 3; ++harrierState.retryCount) {
-            if(initializeRawSrcForCapture()) {
-                isPipelineInitialized = true;
-                ROS_INFO("Camera initialized");
-            }
-
-            ROS_WARN("Camera initialization failed.");
-            ros::Duration(5.0).sleep();
+        if(initCameraSrc()) {
+            isPipelineInitialized = true;
+            ROS_INFO("Camera initialized");
+            return true;
         }
+
+        ROS_WARN("Camera initialization failed.");
+        ros::Duration(5.0).sleep();
 
         ROS_ERROR("Failed to initialize camera (raw) after 3 attempts. Exiting..");
         return false;
@@ -71,8 +70,19 @@ namespace pipeline {
             return false;
         }
 
-        return (ret == GST_STATE_CHANGE_SUCCESS);
+        return (ret == GST_STATE_CHANGE_SUCCESS || 
+            ret == GST_STATE_CHANGE_ASYNC || 
+            ret == GST_STATE_CHANGE_NO_PREROLL);
 
+    }
+
+    bool HarrierCaptureSrc::initCameraSrc() {
+        if (pipelineElements.pipeline) {
+            cleanup();
+        }
+        
+    
+        return initPipeline();
     }
 
     bool HarrierCaptureSrc::captureFrameFromSrc(cv::Mat& frame) {

@@ -1,123 +1,67 @@
 #include "pipelineInitialDetection.hpp"
 #include <ros/ros.h>
 
-PipelineInitialDetection::PipelineInitialDetection(int publishRate) 
-    : publishingRate(publishRate), motionParameters{5.0, 50}, isFirstFrame(true) {
+namespace pipeline {
 
-        for(int i = 0; i < 5; ++i) {
-            potentialMotionEventHistory.push_back(false);
+    PipelineInitialDetection::PipelineInitialDetection(int samplingRate) :
+        state{samplingRate, 0, 0.03} {}
+
+
+    PipelineInitialDetection::~PipelineInitialDetection() {}
+
+    bool PipelineInitialDetection::detectedPotentialMotion(const cv::Mat& frame) {
+        if(frame.empty()) return false;
+
+        std::lock_guard<std::mutex> lock(frameMtx);
+        cv::Mat currentFrame = prepareFrameForDifferencing(frame);
+
+        if(previousFrame.empty()) {
+            currentFrame.copyTo(previousFrame);
+            return false;
         }
-    }
 
+        double diff = calculateFrameDifference(currentFrame, previousFrame);
 
-PipelineInitialDetection::~PipelineInitialDetection() {}
+        state.frameCounter = (state.frameCounter + 1) % state.samplingRate;
 
-bool PipelineInitialDetection::initialize() {
-
-    try {
-        previousFrame = cv::Mat::zeros(480, 640, CV_8UC1);
-
-        isFirstFrame = true;
-        potentialMotionEventHistory.clear();
-
-        for(int i = 0; i < 5; ++i) {
-            potentialMotionEventHistory.push_back(false);
+        if(state.frameCounter == 0) {
+            currentFrame.copyTo(previousFrame);
         }
-    } catch (const std::exception &e) {
-        ROS_ERROR("Execption in motion detector initialization: %s", e.what());
-        return false;
+
+        bool motionDetected = (diff > state.motionThreshold);
+
+        if(motionDetected) {
+            ROS_DEBUG_STREAM("Motion detected between two frames. Difference (%): " << diff);
+        }
+
+        return motionDetected;
     }
-
-    ROS_INFO("Motion detector initialized with a threshold of %.1f%%", motionParameters.threshold);
-    return true;
-}
-
-bool PipelineInitialDetection::initialize(int minThresholdArea, double motionThreshold) {
-    motionParameters.minArea = minThresholdArea;
-    motionParameters.threshold = motionThreshold;
-    return initialize();
-}
-
-bool PipelineInitialDetection::detectMotion(const cv::Mat& currentFrame) {
-    std::lock_guard<std::mutex> lock(motionDetectionMtx);
-
-    if(currentFrame.empty()) {
-        ROS_WARN("Empty frame passed to motion detector.");
-        return false;
-    }
-
-    bool motionDetected = detectFrameDiff(currentFrame);
-
-    potentialMotionEventHistory.push_back(motionDetected);
-    if(potentialMotionEventHistory.size() > 5) {
-        potentialMotionEventHistory.pop_front();
-    }
-
-    return motionDetected;
-}
-
-cv::Mat PipelineInitialDetection::preprocessFrame(const cv::Mat& frame) {
-    cv::Mat processedFrame;
-    /*
-        Grayscale conversion if it's not done already
-    */
-    if(frame.channels() > 1) {
-        cv::cvtColor(frame, processedFrame, cv::COLOR_BGR2GRAY);
-    } else {
-        processedFrame = frame.clone();
-    }
-
-    /*
-        Slightly trivial, maybe this should be removed - slight Gaussian blur applied for noise 
-        reduction but I don't think there's a huge benefit derived from this aside from perhaps
-        extra processing overhead
-    */
-    cv::GaussianBlur(processedFrame, processedFrame, cv::Size(3,3), 0);
-
-    return processedFrame;
-}
-
-bool PipelineInitialDetection::detectFrameDiff(const cv::Mat& currentFrame) {
-    if(isFirstFrame) {
-        previousFrame = preprocessFrame(currentFrame);
-        isFirstFrame = false;
-        return false;
-    }
-
-    // Process current frame with more efficient preprocessing
-    cv::Mat processedCurrentFrame = preprocessFrame(currentFrame);
-
-    // Compute frame difference
-    cv::Mat frameDifference;
-    cv::absdiff(previousFrame, processedCurrentFrame, frameDifference);
-
-    // Threshold the difference image
-    cv::Mat thresholded;
-    cv::threshold(frameDifference, thresholded, 20, 255, cv::THRESH_BINARY);
     
-    double totalArea = currentFrame.rows * currentFrame.cols;
-    double changeArea = cv::countNonZero(thresholded);
-    
-    // Update previous frame for next comparison (use move assignment if possible)
-    processedCurrentFrame.copyTo(previousFrame);
+    cv::Mat PipelineInitialDetection::prepareFrameForDifferencing(const cv::Mat& frame) {
+        cv::Mat resultingFrame;
 
-    // Calculate change percentage and determine if motion is detected
-    double changePercentage = (changeArea / totalArea) * 100.0;
-    bool motionDetected = (changePercentage > motionParameters.threshold);
+        if(frame.channels() > 1) {
+            cv::cvtColor(frame, resultingFrame, cv::COLOR_BGR2GRAY);
+        } else {
+            frame.copyTo(resultingFrame);
+        }
 
-    ROS_DEBUG_THROTTLE(1, "Motion detection: change percentage = %.2f%%, threshold = %.2f%%", 
-        changePercentage, motionParameters.threshold);
+        cv::GaussianBlur(resultingFrame, resultingFrame, cv::Size(21, 21), 0);
 
-    return motionDetected;
-}
+        return resultingFrame;
+    }
 
-void PipelineInitialDetection::setThresholdForDetection(double threshold) {
-    std::lock_guard<std::mutex> lock(motionDetectionMtx);
-    motionParameters.threshold = threshold; 
-    ROS_INFO("Motion threshold set to: %.1f%%", motionParameters.threshold);
-    
-}
+    double PipelineInitialDetection::calculateFrameDifference(const cv::Mat& currentFrame, const cv::Mat& previousFrame) {
+        cv::Mat diff;
+        cv::absdiff(currentFrame, previousFrame, diff);
 
-double PipelineInitialDetection::getThreshold() const {
-    return motionParameters.threshold;
+        cv::Mat thresholdedDifference;
+        cv::threshold(diff, thresholdedDifference, 25, 255, cv::THRESH_BINARY);
+
+        int nonzeroPx = cv::countNonZero(thresholdedDifference);
+
+        double frameSize = currentFrame.rows * currentFrame.cols;
+
+        return static_cast<double>(nonzeroPx) / frameSize;
+    }
 }
