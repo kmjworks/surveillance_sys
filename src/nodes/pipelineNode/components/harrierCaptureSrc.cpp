@@ -4,7 +4,7 @@
 
 
 HarrierCaptureSrc::HarrierCaptureSrc(const std::string& devicePath, int frameRate) 
-    : devicePath(devicePath), frameParams{frameRate, 1920, 1080, "YUYV"},
+    : devicePath(devicePath), frameParams{frameRate, 1080, 1920, "YUY2"},
     pipeline(nullptr), appsink(nullptr), isInitialized(false), isNightMode(false),
     latestFrame(nullptr) {
 
@@ -53,16 +53,16 @@ bool HarrierCaptureSrc::initialize() {
 }
 
 bool HarrierCaptureSrc::buildPipeline() {
+    // Highly optimized pipeline for real-time performance
     std::string pipelineStr = 
-        "v4l2src device=" + devicePath + 
-        " ! video/x-raw,format=" + frameParams.format + 
-        ",width=" + std::to_string(frameParams.width) + 
-        ",height=" + std::to_string(frameParams.height) + 
-        ",framerate=" + std::to_string(frameParams.frameRate) + "/1" + 
-        " ! videoconvert ! video/x-raw,format=BGR" +
-        " ! appsink name=sink";
+        "v4l2src device=" + devicePath + " do-timestamp=true " +
+        "! video/x-raw,format=YUY2,width=" + std::to_string(frameParams.width) +
+        ",height=" + std::to_string(frameParams.height) + ",framerate=" + std::to_string(frameParams.frameRate) +
+        "/1 ! queue max-size-buffers=2 leaky=downstream " + 
+        "! videoconvert ! " +
+        "video/x-raw,format=BGR ! appsink name=sink sync=false max-buffers=1 drop=true";
 
-    ROS_INFO("Pipeline: %s", pipelineStr.c_str());
+    ROS_INFO("Optimized pipeline: %s", pipelineStr.c_str());
 
     GError* error = nullptr;
     pipeline = gst_parse_launch(pipelineStr.c_str(), &error);
@@ -81,10 +81,17 @@ bool HarrierCaptureSrc::buildPipeline() {
         return false;
     }
 
+    // Configure the appsink for maximum real-time performance
     gst_app_sink_set_emit_signals(GST_APP_SINK(appsink), TRUE);
     gst_app_sink_set_drop(GST_APP_SINK(appsink), TRUE);
-    gst_app_sink_set_max_buffers(GST_APP_SINK(appsink), 1);
-
+    gst_app_sink_set_max_buffers(GST_APP_SINK(appsink), 2);  // Reduced to 2 for lower latency
+    
+    // Set properties to ensure real-time behavior
+    g_object_set(G_OBJECT(appsink), "sync", FALSE, NULL);  // Don't sync to clock
+    g_object_set(G_OBJECT(appsink), "async", FALSE, NULL); // Don't wait for async state changes
+    g_object_set(G_OBJECT(appsink), "qos", TRUE, NULL);    // Enable QoS events for better performance
+    
+    // Connect callback for new samples
     g_signal_connect(appsink, "new-sample", G_CALLBACK(cb_newFrameSample), this);
 
     return true;
@@ -98,20 +105,54 @@ bool HarrierCaptureSrc::captureFrame(cv::Mat& frame) {
         return false;
     }
 
-    GstSample* sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
+    // Check if the pipeline is still in PLAYING state
+    GstState state;
+    GstStateChangeReturn ret = gst_element_get_state(pipeline, &state, nullptr, 0);
+    
+    if (ret == GST_STATE_CHANGE_FAILURE || state != GST_STATE_PLAYING) {
+        ROS_ERROR("GStreamer pipeline is not in PLAYING state (current state: %d). Attempting to restart...", state);
+        
+        // Try to reset the pipeline state to PLAYING
+        ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
+        if (ret == GST_STATE_CHANGE_FAILURE) {
+            ROS_ERROR("Failed to restart pipeline.");
+            return false;
+        }
+        
+        // Wait for the state change to complete
+        ret = gst_element_get_state(pipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+        if (ret != GST_STATE_CHANGE_SUCCESS) {
+            ROS_ERROR("Failed to change pipeline state to PLAYING");
+            return false;
+        }
+        
+        ROS_INFO("Pipeline restarted successfully");
+    }
 
-    {
+    // Always try to get a fresh sample first with a timeout
+    GstSample* sample = nullptr;
+    
+    // Try to pull sample with timeout (GST_SECOND = 1 second in nanoseconds)
+    sample = gst_app_sink_try_pull_sample(GST_APP_SINK(appsink), GST_SECOND);
+    
+    // Only use latestFrame as a fallback if we couldn't get a new sample
+    if(!sample) {
+        ROS_DEBUG("No new sample available from gst_app_sink_try_pull_sample, checking cached frame");
         std::lock_guard<std::mutex> lock(frameSampleMtx);
         if(latestFrame) {
             sample = gst_sample_ref(latestFrame);
+            ROS_DEBUG("Using cached frame as fallback");
         }
     }
 
+    // If we still don't have a sample, try one more time with a longer timeout
     if(!sample) {
+        ROS_DEBUG("Trying again to pull a sample with longer timeout");
         sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
-
-        ROS_WARN("Failed to pull a runtime sample from pipeline.");
-        return false;
+        if(!sample) {
+            ROS_WARN("Failed to pull a runtime sample from the pipeline after multiple attempts.");
+            return false;
+        }
     }
 
     frame = gstSampleToCvMat(sample);
@@ -123,7 +164,7 @@ bool HarrierCaptureSrc::captureFrame(cv::Mat& frame) {
         in "night-mode"
     */
 
-    if(frame.empty() && frame.channels() == 3) {
+    if(!frame.empty() && frame.channels() == 3) {
         cv::Mat hsvFrame;
         cv::cvtColor(frame, hsvFrame, cv::COLOR_BGR2HSV);
 
@@ -175,6 +216,7 @@ GstFlowReturn HarrierCaptureSrc::cb_newFrameSample(GstElement* sink, gpointer da
     GstSample* sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
 
     if(!sample) {
+        ROS_WARN("cb_newFrameSample called but failed to pull sample");
         return GST_FLOW_ERROR;
     }
 
@@ -186,6 +228,7 @@ GstFlowReturn HarrierCaptureSrc::cb_newFrameSample(GstElement* sink, gpointer da
         }
 
         self->latestFrame = sample;
+        ROS_DEBUG("New frame sample received and cached in callback");
     }
 
     return GST_FLOW_OK;
@@ -206,7 +249,7 @@ void HarrierCaptureSrc::releasePipelineResources() {
 
     {
         std::lock_guard<std::mutex> lock(frameSampleMtx);
-        
+
         if(latestFrame) {
             gst_sample_unref(latestFrame);
             latestFrame = nullptr;

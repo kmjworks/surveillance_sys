@@ -15,7 +15,9 @@ class PipelineInitialDetection {
     public:
         explicit PipelineInitialDetection(int publishRate = 1);
         ~PipelineInitialDetection();
+
         bool initialize();
+        bool initialize(int minThresholdArea, double motionThreshold);
 
         bool detectMotion(const cv::Mat& currentFrame);
 

@@ -1,13 +1,21 @@
 cmake_minimum_required(VERSION 3.10)
-project(surveillance_system)
+project(surveillance_system VERSION 1.0.0 LANGUAGES CXX)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_BUILD_TYPE Debug)
 
-# # Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
 
-# # Find catkin macros and libraries
-# # if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-# # is used, also find other catkin packages
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Enable compiler warnings and export compile commands for tools like clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_compile_options(-Wall -Wextra -Wpedantic)
+
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
@@ -18,11 +26,21 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+find_package(OpenCV REQUIRED)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GST_APP REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0>=1.8)
+pkg_check_modules(GST_APP REQUIRED gstreamer-app-1.0>=1.8)
+pkg_check_modules(GST_VIDEO REQUIRED gstreamer-video-1.0>=1.8)
+pkg_check_modules(GLIB REQUIRED glib-2.0)
 
+
+include(FetchContent)
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt
+  GIT_TAG e69e5f977d458f2650bb346dadf2ad30c5320281) # 10.2.1
+FetchContent_MakeAvailable(fmt)
 
 
 add_message_files(
@@ -89,8 +107,7 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS cv_bridge image_transport roscpp rospy sensor_msgs std_msgs
-
-  # DEPENDS system_lib
+  DEPENDS OpenCV
 )
 
 # ##########
@@ -104,100 +121,104 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${GSTREAMER_INCLUDE_DIRS}
   ${GST_APP_INCLUDE_DIRS}
+  ${GST_VIDEO_INCLUDE_DIRS}
+  ${GLIB_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
-include(FetchContent)
+link_directories(
+  ${GLIB_LIBRARY_DIRS}
+  ${GSTREAMER_LIBRARY_DIRS}
+  ${GST_APP_LIBRARY_DIRS}
+  ${GST_VIDEO_LIBRARY_DIRS}
+)
 
-FetchContent_Declare(
-  fmt
-  GIT_REPOSITORY https://github.com/fmtlib/fmt
-  GIT_TAG e69e5f977d458f2650bb346dadf2ad30c5320281) # 10.2.1
-FetchContent_MakeAvailable(fmt)
+set(COMMON_DEPS
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
 
-# # Declare a C++ library
-# add_library(${PROJECT_NAME}
-# src/${PROJECT_NAME}/surveillance_system.cpp
-# )
+set(GSTREAMER_DEPS
+  ${GSTREAMER_LIBRARIES}
+  ${GST_APP_LIBRARIES}
+  ${GST_VIDEO_LIBRARIES}
+  ${GLIB_LIBRARIES}
+)
 
-# # Add cmake target dependencies of the library
-# # as an example, code may need to be generated before libraries
-# # either from message generation or dynamic reconfigure
-# add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # # Declare a C++ executable
 # # With catkin_make all packages are built within a single CMake context
 # # The recommended prefix ensures that target names across packages don't collide
-add_executable(motion_detection_node src/nodes/motionDetectionNode/motionDetectionNode.cpp src/nodes/motionDetectionNode/main.cpp)
+add_executable(motion_detection_node 
+  src/nodes/motionDetectionNode/motionDetectionNode.cpp 
+  src/nodes/motionDetectionNode/main.cpp
+)
+add_dependencies(motion_detection_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(motion_detection_node
-  ${catkin_LIBRARIES}
-  ${OpenCV_LIBRARIES}
+  ${COMMON_DEPS}
   fmt::fmt
 )
 
-add_executable(camera_node src/nodes/cameraNode/cameraNode.cpp)
-target_link_libraries(camera_node ${catkin_LIBRARIES})
+add_executable(camera_node 
+  src/nodes/cameraNode/cameraNode.cpp
+)
+add_dependencies(camera_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(camera_node 
+  ${COMMON_DEPS}
+)
 
-add_executable(video_pipeline_node src/nodes/pipelineNode/pipelineNode.cpp src/nodes/pipelineNode/components/pipeline.cpp src/nodes/pipelineNode/main.cpp)
-target_link_libraries(video_pipeline_node ${catkin_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GST_APP_LIBRARIES})
 
-add_executable(diagnostics_node src/nodes/diagnosticsNode/diagnosticsNode.cpp src/nodes/diagnosticsNode/main.cpp)
+add_executable(video_pipeline_node 
+  src/nodes/pipelineNode/main.cpp
+  src/nodes/pipelineNode/pipelineNode.cpp 
+  src/nodes/pipelineNode/components/pipelineInternal.cpp 
+  src/nodes/pipelineNode/components/pipelineInitialDetection.cpp
+  src/nodes/pipelineNode/components/harrierCaptureSrc.cpp  
+)
+add_dependencies(video_pipeline_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(video_pipeline_node 
+  ${COMMON_DEPS}
+  ${GSTREAMER_DEPS}
+)
 
-# # Rename C++ executable without prefix
-# # The above recommended prefix causes long target names, the following renames the
-# # target back to the shorter version for ease of user use
-# # e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
-# set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
+add_executable(diagnostics_node 
+  src/nodes/diagnosticsNode/diagnosticsNode.cpp 
+  src/nodes/diagnosticsNode/main.cpp
+)
+add_dependencies(diagnostics_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(diagnostics_node 
+  ${COMMON_DEPS}
+)
 
-# # Add cmake target dependencies of the executable
-# # same as for the library above
-# add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+install(TARGETS
+  motion_detection_node
+  camera_node
+  video_pipeline_node
+  diagnostics_node
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}  
+)
 
-# # Specify libraries to link a library or executable target against
-# target_link_libraries(${PROJECT_NAME}_node
-# ${catkin_LIBRARIES}
-# )
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
 
-# ############
-# # Install ##
-# ############
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+  FILES_MATCHING PATTERN "*.launch"
+)
 
-# all install targets should use catkin DESTINATION variables
-# See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
-
-# # Mark executable scripts (Python etc.) for installation
-# # in contrast to setup.py, you can choose the destination
-# catkin_install_python(PROGRAMS
-# scripts/my_python_script
-# DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
-
-# # Mark executables for installation
-# # See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
-# install(TARGETS ${PROJECT_NAME}_node
-# RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
-
-# # Mark libraries for installation
-# # See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_libraries.html
-# install(TARGETS ${PROJECT_NAME}
-# ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-# LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-# RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
-# )
-
-# # Mark cpp header files for installation
-# install(DIRECTORY include/${PROJECT_NAME}/
-# DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-# FILES_MATCHING PATTERN "*.h"
-# PATTERN ".svn" EXCLUDE
-# )
-
-# # Mark other files for installation (e.g. launch and bag files, etc.)
-# install(FILES
-# # myfile1
-# # myfile2
-# DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(pipeline_test
+    test/test_pipeline.cpp
+    src/nodes/pipelineNode/components/pipelineInternal.cpp
+    src/nodes/pipelineNode/components/pipelineInitialDetection.cpp
+  )
+  target_link_libraries(pipeline_test
+    ${catkin_LIBRARIES}
+    ${OpenCV_LIBRARIES}
+  )
+endif()
 
 # ############
 # # Testing ##

@@ -36,6 +36,11 @@ cv::Mat PipelineInternal::processFrame(const cv::Mat& frame) {
     }
 
     if(internalState.autoBrightnessCorrection) {
+        if(processedFrame.channels() == 3) {
+            double alpha = 1.2;
+            int beta = 5;
+            processedFrame.convertTo(processedFrame, -1, alpha, beta);
+        }
         processedFrame = applyBrightnessCorrection(processedFrame);
     }
 
@@ -64,11 +69,15 @@ cv::Mat PipelineInternal::convertForNightModeCompatibility(const cv::Mat& frame)
 
 cv::Mat PipelineInternal::applyDenoising(const cv::Mat& frame) {
     cv::Mat denoisedFrame;
-
+    
+    // Replace extremely slow NLMeans denoising with much faster bilateral filter
+    // or median blur which are better suited for real-time processing
     if(frame.channels() == 3) {
-        cv::fastNlMeansDenoisingColored(frame, denoisedFrame, 5, 5, 7, 21);
+        // Using bilateral filter - preserves edges while removing noise
+        cv::bilateralFilter(frame, denoisedFrame, 5, 75, 75);
     } else {
-        cv::fastNlMeansDenoising(frame, denoisedFrame, 5, 7, 21);
+        // For grayscale images, median blur works well and is fast
+        cv::medianBlur(frame, denoisedFrame, 5);
     }
 
     return denoisedFrame;
@@ -77,21 +86,26 @@ cv::Mat PipelineInternal::applyDenoising(const cv::Mat& frame) {
 cv::Mat PipelineInternal::applyBrightnessCorrection(const cv::Mat& frame) {
     cv::Mat correctedFrame;
 
+    // Optimize CLAHE algorithm parameters for better performance
+    // Reduce the size of the grid and clip limit
     if(frame.channels() == 3) {
-        cv::Mat labFrame;
-        cv::cvtColor(frame, labFrame, cv::COLOR_BGR2Lab);
-
-        std::vector<cv::Mat> labChannels(3);
-        cv::split(labFrame, labChannels);
-
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
-        clahe->apply(labChannels[0], labChannels[0]);
-
-        cv::merge(labChannels, labFrame);
-
-        cv::cvtColor(labFrame, correctedFrame, cv::COLOR_Lab2BGR);
+        // For color images, apply CLAHE only to luminance channel
+        // which is faster than processing all channels
+        cv::Mat hsvFrame;
+        cv::cvtColor(frame, hsvFrame, cv::COLOR_BGR2HSV);
+        
+        std::vector<cv::Mat> hsvChannels(3);
+        cv::split(hsvFrame, hsvChannels);
+        
+        // Use a smaller grid for better performance (4x4 instead of 8x8)
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(1.5, cv::Size(4, 4));
+        clahe->apply(hsvChannels[2], hsvChannels[2]); // V channel (brightness)
+        
+        cv::merge(hsvChannels, hsvFrame);
+        cv::cvtColor(hsvFrame, correctedFrame, cv::COLOR_HSV2BGR);
     } else {
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
+        // For grayscale, use smaller grid size for faster processing
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(1.5, cv::Size(4, 4));
         clahe->apply(frame, correctedFrame);
     }
 
@@ -128,4 +142,30 @@ void PipelineInternal::setNightMode(bool enabled) {
 
 bool PipelineInternal::isNightModeEnabled() const {
     return internalState.nightMode;
+}
+
+cv::Mat PipelineInternal::processFrameRealtime(const cv::Mat& frame) {
+    if(frame.empty()) {
+        return cv::Mat();
+    }
+
+    cv::Mat processedFrame = frame.clone();
+
+    if(internalState.denoiseEnabled) {
+        cv::GaussianBlur(processedFrame, processedFrame, cv::Size(3, 3), 0);
+    }
+
+    if(internalState.autoBrightnessCorrection) {
+        processedFrame.convertTo(processedFrame, -1, 1.1, 5);
+    }
+
+    if(internalState.nightMode) {
+        processedFrame = convertForNightModeCompatibility(processedFrame);
+    }
+
+    if(internalState.debugMode) {
+        processedFrame = latchDebugInfo(processedFrame);
+    }
+
+    return processedFrame;
 }

@@ -15,6 +15,8 @@ PipelineNode::PipelineNode(ros::NodeHandle& nh) : nodeHandle(nh), pipelineRunnin
     captureSrcRaw = std::make_unique<HarrierCaptureSrc>(state.devicePath, state.frameRate);
     pipelineInternal = std::make_unique<PipelineInternal>(state.nightMode, state.showDebugFrames);
     initialMotionDetection = std::make_unique<PipelineInitialDetection>(state.motionPublishingRate);    
+
+    timer = nh.createTimer(ros::Duration(1.0 / state.frameRate), &PipelineNode::timerCallback, this);
 }
 
 PipelineNode::~PipelineNode() {
@@ -48,7 +50,7 @@ bool PipelineNode::initialize() {
 
         cameraInitialized = captureSrcRaw->initialize();
 
-    if (!cameraInitialized) {
+        if (!cameraInitialized) {
             ROS_WARN("Failed to initialize camera, retrying in %d seconds", 
                     errorHandling.cameraHandleRetryDelay);
             ros::Duration(errorHandling.cameraHandleRetryDelay).sleep();
@@ -71,7 +73,7 @@ bool PipelineNode::initialize() {
         return false;
     }
 
-    if(initialMotionDetection->initialize()) {
+    if(!initialMotionDetection->initialize()) {
         std::string errorMsg = "Failed to initialize motion detector";
         ROS_ERROR("%s", errorMsg.c_str());
         publishError(errorMsg);
@@ -97,50 +99,86 @@ void PipelineNode::run() {
 void PipelineNode::pipelineProcessingLoop() {
     cv::Mat frame;
     cv::Mat processedFrame;
-
     bool hasMotion = false;
+    
 
-    ros::Time lastMotionPublishingTime = ros::Time::now();
+    
+    ros::WallTime lastMotionPublishTime = ros::WallTime::now();
+    ros::WallTime lastFramePublishTime = ros::WallTime::now();
+    ros::WallRate processingRate(120);
+    
+    // Fixed frame rate for video feed (30 fps if not specified otherwise)
+    const double videoPublishRate = state.frameRate > 0 ? state.frameRate : 30.0;
+    const double videoPublishInterval = 1.0 / videoPublishRate;
+    const double motionPublishInterval = 1.0 / state.motionPublishingRate;
+    
+    ROS_INFO("Target video publish rate: %.1f fps (%.3f sec interval)", 
+        videoPublishRate, videoPublishInterval);
 
     while(pipelineRunning && ros::ok()) {
+        
+        /*
+        
+        */
         bool captureSuccess = captureSrcRaw->captureFrame(frame);
-
-        if(!captureSuccess) {
-            std::string errorMsg = "Frame capture failed.";
-            ROS_WARN("%s", errorMsg.c_str());
-
-            publishError(errorMsg);
-            ros::Duration(0.1).sleep();
+        if(!captureSuccess || frame.empty()) {
+            ros::Duration(0.001).sleep();
             continue;
         }
 
+        // Process frame
         {
             std::lock_guard<std::mutex> lock(frameMtx);
             processedFrame = pipelineInternal->processFrame(frame);
         }
 
-        hasMotion = initialMotionDetection->detectMotion(processedFrame);
+        if(processedFrame.empty()) {
+            ROS_WARN_THROTTLE(1, "Empty processed frame.");
+            continue;
+        }
 
-        if(state.showDebugFrames) {
+        ros::WallTime currentTime = ros::WallTime::now();
+        
+        // Publish processed frames at the specified fixed rate (30fps by default)
+        double timeSinceLastFrame = (currentTime - lastFramePublishTime).toSec();
+        
+        if(timeSinceLastFrame >= videoPublishInterval) {
             cv_bridge::CvImage cvImg;
-
+            cvImg.header.stamp = ros::Time::now();
             cvImg.encoding = state.nightMode ? "mono8" : "bgr8";
             cvImg.image = processedFrame;
             rosInterface.processedFramePublisher.publish(cvImg.toImageMsg());
+            lastFramePublishTime = currentTime;
+            
+            ROS_DEBUG("Frame published: interval=%.4fs (target: %.4fs)", 
+                     timeSinceLastFrame, videoPublishInterval);
+
+            lastFramePublishTime = currentTime;
         }
-
+        
+        // Motion detection and publishing at a controlled rate (1fps by default)
+        hasMotion = initialMotionDetection->detectMotion(processedFrame);
         if(hasMotion) {
-            ros::Time currentTime = ros::Time::now();
-            ros::Duration timeSinceLastPublishingEvent = currentTime - lastMotionPublishingTime;
+            double timesinceLastMotion = (currentTime - lastMotionPublishTime).toSec();
 
-            if(timeSinceLastPublishingEvent.toSec() >= 1.0 / state.motionPublishingRate) {
+            if(timesinceLastMotion >= motionPublishInterval) {
                 publishMotionFrame(processedFrame);
-                lastMotionPublishingTime = currentTime;
+                lastMotionPublishTime = currentTime;
             }
         }
 
-        ros::Duration(0.001).sleep();
+        processingRate.sleep();
     }
+}
+
+void PipelineNode::pipelineCleanup() {
+    pipelineRunning = false;
+    
+    if (pipelineProcessingThread.joinable()) {
+        pipelineProcessingThread.join();
+    }
+  
+    ROS_INFO("Pipeline resources cleaned up");
 }
 
 void PipelineNode::publishMotionFrame(const cv::Mat& frame) {
@@ -157,12 +195,27 @@ void PipelineNode::publishError(const std::string& errorMsg) {
     rosInterface.errorPublisher.publish(msg);
 }
 
-void PipelineNode::pipelineCleanup() {
-    pipelineRunning = false;
-    
-    if (pipelineProcessingThread.joinable()) {
-        pipelineProcessingThread.join();
+void PipelineNode::timerCallback(const ros::TimerEvent &) {
+    cv::Mat processedFrame, frame;
+    cv_bridge::CvImage cvImg;
+
+    {
+        std::lock_guard<std::mutex> lock(frameMtx);
+
+        if(!captureSrcRaw->captureFrame(frame)) {
+            ROS_INFO("Error capturing frame.");
+        }
+        processedFrame = pipelineInternal->processFrame(frame);
+
+        cvImg.header.stamp = ros::Time::now();
+        cvImg.encoding = state.nightMode ? "mono8" : "bgr8";
+        cvImg.image = processedFrame;
     }
-  
-    ROS_INFO("Pipeline resources cleaned up");
+
+    if(processedFrame.empty()) {
+        ROS_WARN_THROTTLE(1, "Empty processed frame.");
+    }
+
+    rosInterface.processedFramePublisher.publish(cvImg.toImageMsg());
 }
+

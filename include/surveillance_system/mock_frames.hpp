@@ -50,7 +50,7 @@ public:
             object_velocity_.y *= -1;
         }
 
-        cv::circle(frame, object_position_, object_size_, cv::Scalar(0, 0, 2555), -1);
+        cv::circle(frame, object_position_, object_size_, cv::Scalar(0, 0, 255), -1);
 
         return frame;
     }

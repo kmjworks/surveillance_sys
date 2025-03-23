@@ -50,6 +50,7 @@ class PipelineNode {
         
     private:
         ros::NodeHandle& nodeHandle;
+        ros::Timer timer;
         internal::ROSInterface rosInterface;
 
         internal::RuntimeState state;
@@ -66,5 +67,6 @@ class PipelineNode {
         void loadPipelineParams();
         void pipelineProcessingLoop();
         void pipelineCleanup();
+        void timerCallback(const ros::TimerEvent &);
 
 };

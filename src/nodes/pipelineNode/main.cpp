@@ -1,4 +1,3 @@
-#include "components/pipeline.hpp"
 #include "pipelineNode.hpp"
 #include "ros/node_handle.h"
 

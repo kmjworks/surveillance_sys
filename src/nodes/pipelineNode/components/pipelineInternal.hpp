@@ -11,7 +11,7 @@ namespace internal {
         bool denoiseEnabled;
 
         std::string timestamp;
-    }
+    };
 }
 
 class PipelineInternal {
@@ -22,6 +22,7 @@ class PipelineInternal {
         bool initialize();
 
         cv::Mat processFrame(const cv::Mat& frame);
+        cv::Mat processFrameRealtime(const cv::Mat& frame);
 
         void setNightMode(bool enabled);
         bool isNightModeEnabled() const;

@@ -3,7 +3,29 @@
     <rosparam command="load" file="$(find surveillance_system)/config/system_params.yaml" />
 
     <!-- Nodes -->
-    <node pkg="surveillance_system" type="camera_node" name="camera_node" output="screen">
+    <node pkg="surveillance_system" type="camera_node" name="cameraNode" output="screen">
         <param name="frame_rate" value="30"/>
     </node>
+    
+    <!-- Pipeline Node -->
+    <node pkg="surveillance_system" type="video_pipeline_node" name="pipelineNode" output="screen">
+        <param name="video_device" value="/dev/video0"/>
+        <param name="frame_rate" value="30"/>
+        <param name="night_mode" value="false"/>
+        <param name="show_debug_frames" value="true"/>
+        <param name="buffer_size" value="100"/>
+        <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
+        <param name="motion_threshold" value="15.0"/>
+        <param name="motion_publish_rate" value="1"/>
+  </node>
+    
+    <!-- Image Visualization Nodes -->
+   <node pkg="image_view" type="image_view" name="pipeline_view">
+    <remap from="image" to="pipeline/runtime_processedFrames"/>
+  </node>
+
+  <node pkg="image_view" type="image_view" name="motion_view">
+    <remap from="image" to="pipeline/runtime_potentialMotionEvent"/>
+  </node>
+
 </launch>
