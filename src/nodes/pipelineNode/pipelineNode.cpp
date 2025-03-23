@@ -94,3 +94,75 @@ void PipelineNode::run() {
 }
 
 
+void PipelineNode::pipelineProcessingLoop() {
+    cv::Mat frame;
+    cv::Mat processedFrame;
+
+    bool hasMotion = false;
+
+    ros::Time lastMotionPublishingTime = ros::Time::now();
+
+    while(pipelineRunning && ros::ok()) {
+        bool captureSuccess = captureSrcRaw->captureFrame(frame);
+
+        if(!captureSuccess) {
+            std::string errorMsg = "Frame capture failed.";
+            ROS_WARN("%s", errorMsg.c_str());
+
+            publishError(errorMsg);
+            ros::Duration(0.1).sleep();
+            continue;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(frameMtx);
+            processedFrame = pipelineInternal->processFrame(frame);
+        }
+
+        hasMotion = initialMotionDetection->detectMotion(processedFrame);
+
+        if(state.showDebugFrames) {
+            cv_bridge::CvImage cvImg;
+
+            cvImg.encoding = state.nightMode ? "mono8" : "bgr8";
+            cvImg.image = processedFrame;
+            rosInterface.processedFramePublisher.publish(cvImg.toImageMsg());
+        }
+
+        if(hasMotion) {
+            ros::Time currentTime = ros::Time::now();
+            ros::Duration timeSinceLastPublishingEvent = currentTime - lastMotionPublishingTime;
+
+            if(timeSinceLastPublishingEvent.toSec() >= 1.0 / state.motionPublishingRate) {
+                publishMotionFrame(processedFrame);
+                lastMotionPublishingTime = currentTime;
+            }
+        }
+
+        ros::Duration(0.001).sleep();
+    }
+}
+
+void PipelineNode::publishMotionFrame(const cv::Mat& frame) {
+    cv_bridge::CvImage cvImg;
+    cvImg.header.stamp = ros::Time::now();
+    cvImg.encoding = state.nightMode ? "mono8" : "bgr8";
+    cvImg.image = frame;
+    rosInterface.motionPublisher.publish(cvImg.toImageMsg());
+}
+
+void PipelineNode::publishError(const std::string& errorMsg) {
+    std_msgs::String msg;
+    msg.data = errorMsg;
+    rosInterface.errorPublisher.publish(msg);
+}
+
+void PipelineNode::pipelineCleanup() {
+    pipelineRunning = false;
+    
+    if (pipelineProcessingThread.joinable()) {
+        pipelineProcessingThread.join();
+    }
+  
+    ROS_INFO("Pipeline resources cleaned up");
+}

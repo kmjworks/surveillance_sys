@@ -8,7 +8,13 @@ int main(int argc, char** argv) {
 
     PipelineNode pipelineNode(nh);
 
+    if (!pipelineNode.initialize()) {
+        ROS_ERROR("Failed to initialize pipeline. Exiting.");
+        return 1;
+    }
+    
+    pipelineNode.run();
+    
     ros::spin();
-
     return 0;
 }
