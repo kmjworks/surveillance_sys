@@ -91,6 +91,7 @@ void PipelineNode::stopProcessingThread() {
 void PipelineNode::processFrames() {
     cv::Mat raw, processed;
     bool motionPresence = false;
+    std::vector<cv::Rect> motionRects;
 
     while(pipelineRunning) {
         if(!components.cameraSrc->captureFrameFromSrc(raw)) {
@@ -102,7 +103,13 @@ void PipelineNode::processFrames() {
         {
             std::lock_guard<std::mutex> lock(frameMtx);
             processed = components.pipelineInternal->processFrame(raw);
-            motionPresence = components.pipelineIntegratedMotionDetection->detectedPotentialMotion(processed);
+            motionPresence = components.pipelineIntegratedMotionDetection->detectedPotentialMotion(processed, motionRects);
+        }
+
+        if(motionPresence && !motionRects.empty()) {
+            for(const auto& rect : motionRects) {
+                cv::rectangle(processed, rect, cv::Scalar(0,255,0), 2);
+            }
         }
 
         publishFrame(processed, motionPresence);
