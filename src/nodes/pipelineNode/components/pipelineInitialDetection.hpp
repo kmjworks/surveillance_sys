@@ -27,6 +27,9 @@ namespace pipeline {
             cv::Mat previousFrame;
             std::mutex frameMtx;
 
+            std::vector<cv::Rect> regionOfInterestAreas;
+            bool useRoi = false;
+
             double calculateFrameDifference(const cv::Mat& currentFrame, const cv::Mat& previousFrame);
             cv::Mat getThresholdedDifference(const cv::Mat& currentFrame, const cv::Mat& previousFrame);
             void findMotionRegions(const cv::Mat& thresholdedDifference, std::vector<cv::Rect>& motionRects);

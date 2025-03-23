@@ -42,15 +42,17 @@ namespace pipeline {
     }
     
     cv::Mat PipelineInitialDetection::prepareFrameForDifferencing(const cv::Mat& frame) {
-        cv::Mat resultingFrame;
+        cv::Mat resultingFrame, downsampledFrame;
 
-        if(frame.channels() > 1) {
-            cv::cvtColor(frame, resultingFrame, cv::COLOR_BGR2GRAY);
+        cv::resize(frame, downsampledFrame, cv::Size(), 0.5, 0.5, cv::INTER_LINEAR);
+
+        if(downsampledFrame.channels() > 1) {
+            cv::cvtColor(downsampledFrame, resultingFrame, cv::COLOR_BGR2GRAY);
         } else {
             frame.copyTo(resultingFrame);
         }
 
-        cv::GaussianBlur(resultingFrame, resultingFrame, cv::Size(21, 21), 0);
+        cv::GaussianBlur(resultingFrame, resultingFrame, cv::Size(5, 5), 0);
 
         return resultingFrame;
     }
@@ -75,6 +77,14 @@ namespace pipeline {
         cv::absdiff(currentFrame, previousFrame, diff);
         cv::threshold(diff, thresholdedDifference, 25, 255, cv::THRESH_BINARY);
 
+        if(useRoi && !regionOfInterestAreas.empty()) {
+            cv::Mat mask = cv::Mat::zeros(thresholdedDifference.size(), CV_8UC1);
+            for(const auto& roi : regionOfInterestAreas) {
+                cv::rectangle(mask, roi, cv::Scalar(255), -1);
+            }
+
+            thresholdedDifference = thresholdedDifference & mask;
+        }
         cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));
         cv::morphologyEx(thresholdedDifference,  thresholdedDifference, cv::MORPH_CLOSE, kernel);
 
