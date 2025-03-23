@@ -95,8 +95,6 @@ bool PipelineInitialDetection::detectFrameDiff(const cv::Mat& currentFrame) {
     cv::Mat thresholded;
     cv::threshold(frameDifference, thresholded, 20, 255, cv::THRESH_BINARY);
     
-    // Calculate changed pixels directly without contour finding for better performance
-    // This avoids the expensive contour finding operation
     double totalArea = currentFrame.rows * currentFrame.cols;
     double changeArea = cv::countNonZero(thresholded);
     

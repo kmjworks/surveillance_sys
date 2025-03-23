@@ -1,51 +1,45 @@
-#pragma once
+#pragma once 
 
-#include <string>
 #include <opencv2/opencv.hpp>
 #include <gst/gst.h>
+#include <string>
 #include <atomic>
 
-namespace internal {
 
-    struct FrameParams {
+namespace pipeline {
+    
+    struct SrcState {
         int frameRate;
-        int height;
-        int width;
-        std::string format;
+        bool nightMode;
+        int retryCount;
     };
 
-}
-
-
-class HarrierCaptureSrc {
-    public:
-        HarrierCaptureSrc(const std::string& devicePath, int frameRate);
-        ~HarrierCaptureSrc();
-
-        bool initialize();
-
-        bool captureFrame(cv::Mat& frame);
-
-        std::string getFrameFormat() const;
-
-        bool isNightModeDetected() const;
-
-    private:
-        std::string devicePath;
-        internal::FrameParams frameParams;
-
+    struct Elements {
         GstElement* pipeline;
         GstElement* appsink;
+    };
 
-        std::atomic<bool> isInitialized;
-        std::atomic<bool> isNightMode;
+    class HarrierCaptureSrc {
+        public:
+            HarrierCaptureSrc(const std::string& devicePath, int frameRate, bool nightMode);
+            ~HarrierCaptureSrc();
 
-        std::mutex frameSampleMtx;
-        GstSample* latestFrame;
+            bool initializeRawSrcForCapture();
+            bool captureFrameFromSrc(cv::Mat& frame);
+            void releasePipeline();
 
-        bool buildPipeline();
-        void releasePipelineResources();
-        
-        static GstFlowReturn cb_newFrameSample(GstElement* sink, gpointer data);
-        cv::Mat gstSampleToCvMat(GstSample* sample);
-};
+        private:
+            std::string devicePath;
+            std::atomic<bool> isPipelineInitialized;
+            SrcState harrierState;
+            Elements pipelineElements;
+
+            bool initPipeline();
+            bool initCameraSrc();
+
+            void cleanup();
+            bool retryOnFail();
+            bool isNightMode(GstSample *sample);
+
+    };
+}

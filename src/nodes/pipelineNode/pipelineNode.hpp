@@ -52,7 +52,6 @@ class PipelineNode {
         ros::NodeHandle& nodeHandle;
         ros::Timer timer;
         internal::ROSInterface rosInterface;
-
         internal::RuntimeState state;
         internal::OnError errorHandling;
 
@@ -64,9 +63,18 @@ class PipelineNode {
         std::thread pipelineProcessingThread;
         std::atomic<bool> pipelineRunning;
 
+        cv::Mat latestFrame;
+        cv::Mat latestProcessedFrame;
+        cv::Mat previousRawFrame;
+        std::mutex frameCacheMutex;
+        ros::Time lastCaptureTime;
+        int frameCount = 0;
+        ros::Time statsStartTime;
+
         void loadPipelineParams();
         void pipelineProcessingLoop();
         void pipelineCleanup();
         void timerCallback(const ros::TimerEvent &);
+        bool isNewFrame(const cv::Mat& currentFrame);
 
 };
