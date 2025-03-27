@@ -3,10 +3,10 @@
 #include "components/pipelineInternal.hpp"
 #include "components/pipelineInitialDetection.hpp"
 
-#include "surveillance_system/motion_detection_events_array.h"
-#include "surveillance_system/motion_event.h"
-#include <sensor_msgs/RegionOfInterest.h>
-#include <geometry_msgs/Point.h>
+//#include "surveillance_system/motion_detection_events_array.h"
+// #include "surveillance_system/motion_event.h"
+//#include <sensor_msgs/RegionOfInterest.h>
+//#include <geometry_msgs/Point.h>
 
 PipelineNode::PipelineNode(ros::NodeHandle& nh, ros::NodeHandle& privateHandle) :
     nh(nh), nh_priv(privateHandle), pipelineRunning(false) {
@@ -31,7 +31,7 @@ bool PipelineNode::initializePipelineNode() {
 
     loadParameters();
 
-    rosInterface.pub_motionEvents = nh.advertise<surveillance_system::motion_detection_events_array>("pipeline/runtime_potentialMotionEvents", 10);
+    rosInterface.pub_motionEvents = nh.advertise<sensor_msgs::Image>("pipeline/runtime_potentialMotionEvents", 10);
     rosInterface.pub_processedFrames = nh.advertise<sensor_msgs::Image>("pipeline/runtime_processedFrames", 10);
     rosInterface.pub_runtimeErrors = nh.advertise<std_msgs::String>("pipeline/runtime_errors", 10);
 
@@ -132,46 +132,36 @@ void PipelineNode::processFrames() {
             ROS_WARN_THROTTLE(2.0, "Empty frame captured, skpping processing.");
             continue;
         }
-        /*
-            I'm using a temporary processed frame here so that the mutex can be unlocked sooner
-        */
-        cv::Mat currentProcessedFrame;
-        std::vector<cv::Rect> currentMotionRects;
-        bool currentMotionPresence = false;
+    
         
         {
             std::lock_guard<std::mutex> lock(frameMtx);
-            currentProcessedFrame = components.pipelineInternal->processFrame(raw);
-            if(currentProcessedFrame.empty()) {
-                ROS_WARN_THROTTLE(2.0, "Processing resulted in empty frame, skpping motion processing.");
-                continue;
+            processed = components.pipelineInternal->processFrame(raw);
+            
+            if(!processed.empty()) {
+                motionPresence = components.pipelineIntegratedMotionDetection->detectedPotentialMotion(processed, motionRects);
+
+                if(motionPresence && !motionRects.empty()) {
+                    for(const auto& rect : motionRects) {
+                        cv::rectangle(processed, rect, cv::Scalar(0,255,0), 2);
+                    }
+                }
             }
-            currentMotionPresence = components.pipelineIntegratedMotionDetection->detectedPotentialMotion(currentProcessedFrame, currentMotionRects);
+            
         }
 
-        processed = currentProcessedFrame;
-        motionRects = currentMotionRects;
-        motionPresence = currentMotionPresence;
-
-        if(motionPresence) {
-            surveillance_system::motion_detection_events_array motionMsgs;
-            motionMsgs.header.stamp = frameCaptureTime;
-            motionMsgs.header.frame_id = "harrier36x";
-
-            for(const auto& rect : motionRects){
-                surveillance_system::motion_event detectionDetails;
-                detectionDetails.bounding_box.x_offset = rect.x;
-                detectionDetails.bounding_box.y_offset = rect.y;
-                detectionDetails.bounding_box.width = rect.width;
-                detectionDetails.bounding_box.height = rect.height;
-                detectionDetails.bounding_box.do_rectify = false;
-
-                motionMsgs.detections.push_back(detectionDetails);
-            }
-            rosInterface.pub_motionEvents.publish(motionMsgs);
+        if(!processed.empty()) {
+            publishFrame(processed, frameCaptureTime);
         }
 
-        publishFrame(processed, frameCaptureTime);
+        if(motionPresence) { 
+            cv_bridge::CvImage cvImageMotion; 
+            cvImageMotion.encoding = (processed.channels() == 1 ? "mono8" : "bgr8");
+            cvImageMotion.image = processed;
+            cvImageMotion.header.stamp = frameCaptureTime;
+            cvImageMotion.header.frame_id = "Harrier36X-Initial-Detection";
+            rosInterface.pub_motionEvents.publish(cvImageMotion.toImageMsg());
+        }
         processingLoop_rate.sleep();
     }
 }

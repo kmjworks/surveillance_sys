@@ -6,7 +6,7 @@
 namespace pipeline {
 
     PipelineInitialDetection::PipelineInitialDetection(int samplingRate) :
-        state{25.0, 500.0, std::make_pair(4.0, 0.25), samplingRate, 5, 3, 0} {
+        state{20.0, 300.0, std::make_pair(0.2, 7.0), samplingRate, 7, 7, 0} {
             ROS_INFO("Pipeline initial motion detector  initialized.");
         }
 
@@ -32,32 +32,68 @@ namespace pipeline {
 
         std::lock_guard<std::mutex> lock(frameMtx);
 
-        cv::Mat currentFrame = prepareFrameForDifferencing(frame);
+        const float scalingFactor = 0.5f;
+        const int beforeScalingWidth = frame.cols;
+        const int beforeScalingHeight = frame.rows;
 
-        if(previousFrame.empty()) {
-            currentFrame.copyTo(previousFrame);
+        cv::Rect activeRegion = computeActiveRegion(frame);
+        cv::Mat roiAdjustedFrame;
+
+        if(activeRegion.width == frame.cols && activeRegion.height == frame.rows) {
+            roiAdjustedFrame = prepareFrameForDifferencing(frame);
+        } else {
+            cv::Mat frameROI = frame(activeRegion);
+            roiAdjustedFrame = prepareFrameForDifferencing(frameROI);
+        }
+
+
+
+        if (previousFrame.empty() || 
+            previousFrame.cols != roiAdjustedFrame.cols || 
+            previousFrame.rows != roiAdjustedFrame.rows) {
+            roiAdjustedFrame.copyTo(previousFrame);
             return false;
         }
 
-        cv::Mat binaryDifference = getAdaptiveThresholdedDifference(currentFrame, previousFrame);
+        cv::Mat binaryDifference = getAdaptiveThresholdedDifference(roiAdjustedFrame, previousFrame);
         std::pair<std::vector<cv::Rect>, std::vector<cv::Point2f>> potentialRectsAndCentroids;
 
         findMotionRegions(binaryDifference, potentialRectsAndCentroids);
+        
+        if (!(activeRegion.width == frame.cols && activeRegion.height == frame.rows)) {
+            for (auto& rect : potentialRectsAndCentroids.first) {
+                rect.x += activeRegion.x / 2;  
+                rect.y += activeRegion.y / 2;
+            }
+            
+            for (auto& point : potentialRectsAndCentroids.second) {
+                point.x += activeRegion.x / 2;
+                point.y += activeRegion.y / 2;
+            }
+        }
+
         updateTrackedRegions(potentialRectsAndCentroids.first, potentialRectsAndCentroids.second);
 
         confirmedMotionRects.clear();
         for(const auto& region : trackedRegions) {
             if(region.continuityConfirmed) {
-                cv::Rect defaultScaleRect = region.rect;
-                defaultScaleRect.x *= 2;
-                defaultScaleRect.y *= 2;
-                defaultScaleRect.width *= 2;
-                defaultScaleRect.height *= 2;
-                confirmedMotionRects.push_back(defaultScaleRect);
+
+                cv::Rect scaledRect;
+                scaledRect.x = static_cast<int>(region.rect.x / scalingFactor);
+                scaledRect.y = static_cast<int>(region.rect.y / scalingFactor);
+                scaledRect.width = static_cast<int>(region.rect.width / scalingFactor);
+                scaledRect.height = static_cast<int>(region.rect.height / scalingFactor);
+
+                scaledRect.x = std::max(0, std::min(scaledRect.x, beforeScalingWidth - 1));
+                scaledRect.y = std::max(0, std::min(scaledRect.y, beforeScalingHeight - 1));
+                scaledRect.width = std::min(scaledRect.width, beforeScalingWidth - scaledRect.x);
+                scaledRect.height = std::min(scaledRect.height, beforeScalingHeight - scaledRect.y);
+
+                confirmedMotionRects.push_back(scaledRect);
             }
         }
 
-        previousFrame = currentFrame.clone();
+        roiAdjustedFrame.copyTo(previousFrame);
 
         return !confirmedMotionRects.empty();
     }
@@ -148,15 +184,21 @@ namespace pipeline {
     }
 
     void PipelineInitialDetection::updateTrackedRegions(const std::vector<cv::Rect>& currentRects, const std::vector<cv::Point2f>& currentCentroids) {
-        const double maxCentroidDistance = 30.0;
+        const double maxCentroidDistance = 50.0;
 
         for(auto& region : trackedRegions) {
-            region.framesSinceSeen++;
+            if(!region.kalmanState) {
+                initializeKalmanFilter(region);
+            } else {
+                cv::Mat prediction = region.kalman.predict();
+                region.predictedCentroid.x = prediction.at<float>(0);
+                region.predictedCentroid.y = prediction.at<float>(1);
+                region.velocity.x = prediction.at<float>(2);
+                region.velocity.y = prediction.at<float>(3);
+            }
         }
 
         std::vector<bool> currentMatched(currentRects.size(), false);
-        std::vector<int> trackIndices(trackedRegions.size());
-        std::iota(trackIndices.begin(), trackIndices.end(), 0);
 
         for (int i = 0; i < trackedRegions.size(); ++i) {
             if(trackedRegions[i].framesSinceSeen > state.maxLostFrames +1) continue;
@@ -165,7 +207,11 @@ namespace pipeline {
             int bestMatchingIdentifier = -1;
 
             for(int j = 0; j < currentRects.size(); ++j) {
-                double dist = cv::norm(trackedRegions[i].centroid - currentCentroids[j]);
+                if(currentMatched[j]) continue;
+
+                cv::Point2f comparePoint = trackedRegions[i].kalmanState ? trackedRegions[i].predictedCentroid : trackedRegions[i].centroid;
+
+                double dist = cv::norm(comparePoint - currentCentroids[j]);
                 if(dist < maxCentroidDistance && dist < minDistance) {
                     minDistance = dist;
                     bestMatchingIdentifier = j;
@@ -173,8 +219,23 @@ namespace pipeline {
             }
 
             if(bestMatchingIdentifier != -1) {
-                trackedRegions[i].rect = currentRects[bestMatchingIdentifier];
-                trackedRegions[i].centroid = currentCentroids[bestMatchingIdentifier];
+
+                cv::Mat measurement = (cv::Mat_<float>(2, 1) << currentCentroids[bestMatchingIdentifier].x, currentCentroids[bestMatchingIdentifier].y);
+                
+                if(trackedRegions[i].kalmanState) {
+                    cv::Mat corrected = trackedRegions[i].kalman.correct(measurement);
+                    trackedRegions[i].centroid.x = corrected.at<float>(0);
+                    trackedRegions[i].centroid.y = corrected.at<float>(1);
+
+                    float alpha = 0.7f;
+                    trackedRegions[i].rect.width = alpha * currentRects[bestMatchingIdentifier].width +  (1-alpha) * trackedRegions[i].rect.width;
+                    trackedRegions[i].rect.height = alpha * currentRects[bestMatchingIdentifier].height + (1-alpha) * trackedRegions[i].rect.height;
+                } else {
+                    trackedRegions[i].centroid = currentCentroids[bestMatchingIdentifier];
+                    trackedRegions[i].rect = currentRects[bestMatchingIdentifier];
+                }
+
+                
                 trackedRegions[i].frameAge++;
                 trackedRegions[i].consecutiveFrames++;
                 trackedRegions[i].framesSinceSeen = 0;
@@ -182,25 +243,39 @@ namespace pipeline {
 
                 if(!trackedRegions[i].continuityConfirmed && trackedRegions[i].consecutiveFrames >= state.minConsecutiveFrames) {
                     trackedRegions[i].continuityConfirmed = true;
-                } else {
-                    trackedRegions[i].consecutiveFrames = 0;
-                    trackedRegions[i].continuityConfirmed = false;
-                }
-            }
+                    ROS_INFO("Track %d confirmed", trackedRegions[i].identifier);
 
-            for (int j = 0; j < currentRects.size(); ++j) {
-                if (!currentMatched[j]) {
-                    TrackedRegion newRegion;
-                    newRegion.identifier = state.nextTrackIdentifier++;
-                    newRegion.rect = currentRects[j];
-                    newRegion.centroid = currentCentroids[j];
-                    newRegion.frameAge = 1;
-                    newRegion.consecutiveFrames = 1;
-                    newRegion.framesSinceSeen = 0;
-                    newRegion.continuityConfirmed = (state.minConsecutiveFrames <= 1);
-                    trackedRegions.push_back(newRegion);
+                } else if(trackedRegions[i].kalmanState && trackedRegions[i].framesSinceSeen <= state.maxLostFrames / 2) {
+
+                    trackedRegions[i].centroid = trackedRegions[i].predictedCentroid;
+
+                    if (trackedRegions[i].framesSinceSeen > 2) {
+                        trackedRegions[i].consecutiveFrames = 0;
+
+                        if(trackedRegions[i].continuityConfirmed) {
+                            trackedRegions[i].continuityConfirmed = false;
+                        }
+
+                    }
                 }
             }
+        }
+
+        for (int j = 0; j < currentRects.size(); ++j) {
+            if (!currentMatched[j]) {
+                TrackedRegion newRegion;
+                newRegion.identifier = state.nextTrackIdentifier++;
+                newRegion.rect = currentRects[j];
+                newRegion.centroid = currentCentroids[j];
+                newRegion.frameAge = 1;
+                newRegion.consecutiveFrames = 1;
+                newRegion.framesSinceSeen = 0;
+                newRegion.continuityConfirmed = (state.minConsecutiveFrames <= 1);
+
+                initializeKalmanFilter(newRegion);
+                trackedRegions.push_back(newRegion);
+            }
+        }
 
             trackedRegions.erase(
                 std::remove_if(trackedRegions.begin(), trackedRegions.end(),
@@ -210,6 +285,117 @@ namespace pipeline {
                     }),
                     trackedRegions.end()
             );
+    }
+
+
+    void PipelineInitialDetection::initializeKalmanFilter(TrackedRegion& region) {
+        float dt = 1.0f;
+
+        region.kalman.transitionMatrix = (cv::Mat_<float>(4,4) <<
+            1, 0, dt, 0,
+            0, 1, 0, dt,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        );
+
+        region.kalman.measurementMatrix = (cv::Mat_<float>(2,4) <<
+            1, 0, 0, 0,
+            0, 1, 0, 0
+        );
+
+        float processNoise = 1e-4f;
+        cv::setIdentity(region.kalman.processNoiseCov, cv::Scalar::all(processNoise));
+
+        float measurementNoise = 1e-1f;
+        cv::setIdentity(region.kalman.measurementNoiseCov, cv::Scalar::all(measurementNoise));
+
+        cv::setIdentity(region.kalman.errorCovPost, cv::Scalar::all(1));
+
+        region.kalman.statePost.at<float>(0) = region.centroid.x;
+        region.kalman.statePost.at<float>(1) = region.centroid.y;
+        region.kalman.statePost.at<float>(2) = 0;
+        region.kalman.statePost.at<float>(3) = 0;
+
+        region.kalmanState = true;
+        
+    }
+
+    cv::Rect PipelineInitialDetection::computeActiveRegion(const cv::Mat& frame) {
+        cv::Rect activeRegion(0, 0, frame.cols, frame.rows);
+
+        bool trackingActive = false;
+        int minX = frame.cols, minY = frame.rows;
+        int maxX = 0, maxY = 0;
+
+        for(const auto& region : trackedRegions) {
+            if (region.framesSinceSeen <= state.maxLostFrames / 2) {
+                trackingActive = true;
+
+                cv::Point2f trackPos = region.kalmanState && region.framesSinceSeen > 0 ? region.predictedCentroid : region.centroid;
+                
+                float vxAbs = region.kalmanState ? std::abs(region.velocity.x) : 0;
+                float vyAbs = region.kalmanState ? std::abs(region.velocity.y) : 0;
+
+                int xMargin = static_cast<int>(std::max(region.rect.width / 2.0f, vxAbs * 3.0f));
+                int yMargin = static_cast<int>(std::max(region.rect.height / 2.0f, vyAbs * 3.0f));
+                
+                minX = std::min(minX, static_cast<int>(trackPos.x - xMargin));
+                minY = std::min(minY, static_cast<int>(trackPos.y - yMargin));
+                maxX = std::max(maxX, static_cast<int>(trackPos.x + xMargin));
+                maxY = std::max(maxY, static_cast<int>(trackPos.y + yMargin));
+            }
         }
+
+        if(trackingActive) {
+            const int fixedMargin = 50;
+            minX = std::max(0, minX - fixedMargin);
+            minY = std::max(0, minY - fixedMargin);
+            maxX = std::min(frame.cols, maxX + fixedMargin);
+            maxY = std::min(frame.rows, maxY + fixedMargin);
+
+
+            if ((maxX - minX) * (maxY - minY) < 0.7 * frame.cols * frame.rows) {
+                activeRegion = cv::Rect(minX, minY, maxX - minX, maxY - minY);
+
+                if (activeRegion.width <= 0 || activeRegion.height <= 0) {
+                    activeRegion = cv::Rect(0, 0, frame.cols, frame.rows);
+                }
+
+                ROS_DEBUG("ROI: %d,%d %dx%d (%.1f%% of frame)", 
+                    activeRegion.x, activeRegion.y, 
+                    activeRegion.width, activeRegion.height,
+                    100.0 * (activeRegion.width * activeRegion.height) / 
+                    (frame.cols * frame.rows));
+               
+            } else {
+                ROS_DEBUG("ROI: Region too large, using the full frame instead.");
+            }
+        } else {
+            static int fullFrameCounter = 0;
+            if (++fullFrameCounter % 10 == 0) {
+                ROS_DEBUG("No active tracks, using full frame (periodic scan)");
+            } else {
+                int gridSize = 3;
+                int regionIndex = (fullFrameCounter % (gridSize * gridSize));
+                int gridX = regionIndex % gridSize;
+                int gridY = regionIndex / gridSize;
+            
+                int regionWidth = frame.cols / gridSize;
+                int regionHeight = frame.rows / gridSize;
+            
+                activeRegion = cv::Rect(
+                    gridX * regionWidth, 
+                    gridY * regionHeight,
+                regionWidth, 
+                regionHeight
+                );
+            
+                ROS_DEBUG("Grid scanning region %d: %d,%d %dx%d", 
+                     regionIndex, activeRegion.x, activeRegion.y, 
+                     activeRegion.width, activeRegion.height);
+            }
+        }
+
+        return activeRegion;
     }
 }
