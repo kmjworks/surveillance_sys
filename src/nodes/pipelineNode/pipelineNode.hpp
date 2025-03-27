@@ -64,7 +64,7 @@ class PipelineNode {
 
         void loadParameters();
         void processFrames();
-        void publishFrame(const cv::Mat& frame, bool motionPresence);
+        void publishFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishError(const std::string& errorMsg);
         void startProcessingThread();
         void stopProcessingThread();

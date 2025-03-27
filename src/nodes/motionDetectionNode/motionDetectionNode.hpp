@@ -174,12 +174,7 @@ void MotionDetectorNode<MotionStrategy>::processMotionContours(
 
             // Create and publish motion event
             surveillance_system::motion_event event;
-            event.header = msg_header;
-            event.event_id = ++event_counter_;
-            event.location.x = moments.m10 / moments.m00;
-            event.location.y = moments.m01 / moments.m00;
-            event.area = area;
-            event.confidence = area / (debug_frame.rows * debug_frame.cols);
+
 
             event_pub_.publish(event);
         }

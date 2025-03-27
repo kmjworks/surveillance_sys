@@ -3,6 +3,11 @@
 #include "components/pipelineInternal.hpp"
 #include "components/pipelineInitialDetection.hpp"
 
+#include "surveillance_system/motion_detection_events_array.h"
+#include "surveillance_system/motion_event.h"
+#include <sensor_msgs/RegionOfInterest.h>
+#include <geometry_msgs/Point.h>
+
 PipelineNode::PipelineNode(ros::NodeHandle& nh, ros::NodeHandle& privateHandle) :
     nh(nh), nh_priv(privateHandle), pipelineRunning(false) {
     
@@ -26,7 +31,7 @@ bool PipelineNode::initializePipelineNode() {
 
     loadParameters();
 
-    rosInterface.pub_motionEvents = nh.advertise<sensor_msgs::Image>("pipeline/runtime_potentialMotionEvents", 10);
+    rosInterface.pub_motionEvents = nh.advertise<surveillance_system::motion_detection_events_array>("pipeline/runtime_potentialMotionEvents", 10);
     rosInterface.pub_processedFrames = nh.advertise<sensor_msgs::Image>("pipeline/runtime_processedFrames", 10);
     rosInterface.pub_runtimeErrors = nh.advertise<std_msgs::String>("pipeline/runtime_errors", 10);
 
@@ -58,16 +63,24 @@ void PipelineNode::loadParameters() {
 }
 
 
-void PipelineNode::publishFrame(const cv::Mat& frame, bool motionPresence) {
-    cv_bridge::CvImage cvImage;
-    cvImage.encoding = (frame.channels() == 1 ? "mono8" : "bgr8");
-    cvImage.image = frame;
+void PipelineNode::publishFrame(const cv::Mat& frame, const ros::Time& timestamp) {
+    try {
+        cv_bridge::CvImage cvImgForMsgPrep;
+        cvImgForMsgPrep.encoding = (frame.channels() == 1 ? "mono8" : "bgr8");
+        cvImgForMsgPrep.image = frame;
+        cvImgForMsgPrep.header.stamp = timestamp;
+        cvImgForMsgPrep.header.frame_id = "Harrier36X-Initial-Detection";
 
-    rosInterface.pub_processedFrames.publish(cvImage.toImageMsg());
-
-    if(motionPresence) {
-        rosInterface.pub_motionEvents.publish(cvImage.toImageMsg());
+        rosInterface.pub_processedFrames.publish(cvImgForMsgPrep.toImageMsg());
+    } catch (const cv_bridge::Exception &e) {
+        publishError("cv_bridge exception: " + std::string(e.what()));
     }
+    /* 
+        Should probably handle a std::exception as well? 
+        Hmm, come to think of it - I think it's not the right place for this since I will eventually
+        make a separate component for handling system level errors - the pipeline assumes that everything is
+        functioning on its side and it doesn't (and doesn't have to) know about system-wide status (that's a task for the master)
+    */
 }
 
 void PipelineNode::publishError(const std::string& errorMsg) {
@@ -79,7 +92,7 @@ void PipelineNode::publishError(const std::string& errorMsg) {
 }
 
 void PipelineNode::startProcessingThread() {
-    pipelineRunning = true;
+    if(!pipelineRunning) pipelineRunning = true;
     pipelineProcessingThread = std::thread(&PipelineNode::processFrames, this);
 }
 
@@ -92,29 +105,74 @@ void PipelineNode::processFrames() {
     cv::Mat raw, processed;
     bool motionPresence = false;
     std::vector<cv::Rect> motionRects;
+    ros::Rate processingLoop_rate(30);
 
-    while(pipelineRunning) {
+    while(pipelineRunning && ros::ok()) {
+
+        /*
+            Potentially move the capture time to the gstreamer pipeline closer to the raw src (caps)
+            and attach it as metadata.
+
+            'frameCaptureTime' is not instantenous here and is guaranteed to have some kind of a latency 
+            because of the kernel's scheduling, frame data transmission via USB and so on.
+            But for testing and prototyping the inital system, it's an acceptable solution for a temporal one. 
+
+            TODO: Determine the frame acquisition latency and subtract it or monitor it as a compounding
+            offset
+        */
+        ros::Time frameCaptureTime = ros::Time::now();
+
         if(!components.cameraSrc->captureFrameFromSrc(raw)) {
             publishError("Frame capture failed.");
             ros::Duration(0.5).sleep();
             continue;
         }
+
+        if(raw.empty()) {
+            ROS_WARN_THROTTLE(2.0, "Empty frame captured, skpping processing.");
+            continue;
+        }
+        /*
+            I'm using a temporary processed frame here so that the mutex can be unlocked sooner
+        */
+        cv::Mat currentProcessedFrame;
+        std::vector<cv::Rect> currentMotionRects;
+        bool currentMotionPresence = false;
         
         {
             std::lock_guard<std::mutex> lock(frameMtx);
-            processed = components.pipelineInternal->processFrame(raw);
-            motionPresence = components.pipelineIntegratedMotionDetection->detectedPotentialMotion(processed, motionRects);
-        }
-
-        if(motionPresence && !motionRects.empty()) {
-            for(const auto& rect : motionRects) {
-                cv::rectangle(processed, rect, cv::Scalar(0,255,0), 2);
+            currentProcessedFrame = components.pipelineInternal->processFrame(raw);
+            if(currentProcessedFrame.empty()) {
+                ROS_WARN_THROTTLE(2.0, "Processing resulted in empty frame, skpping motion processing.");
+                continue;
             }
+            currentMotionPresence = components.pipelineIntegratedMotionDetection->detectedPotentialMotion(currentProcessedFrame, currentMotionRects);
         }
 
-        publishFrame(processed, motionPresence);
+        processed = currentProcessedFrame;
+        motionRects = currentMotionRects;
+        motionPresence = currentMotionPresence;
 
-        ros::Duration(1.0 / params.frameRate).sleep();
+        if(motionPresence) {
+            surveillance_system::motion_detection_events_array motionMsgs;
+            motionMsgs.header.stamp = frameCaptureTime;
+            motionMsgs.header.frame_id = "harrier36x";
+
+            for(const auto& rect : motionRects){
+                surveillance_system::motion_event detectionDetails;
+                detectionDetails.bounding_box.x_offset = rect.x;
+                detectionDetails.bounding_box.y_offset = rect.y;
+                detectionDetails.bounding_box.width = rect.width;
+                detectionDetails.bounding_box.height = rect.height;
+                detectionDetails.bounding_box.do_rectify = false;
+
+                motionMsgs.detections.push_back(detectionDetails);
+            }
+            rosInterface.pub_motionEvents.publish(motionMsgs);
+        }
+
+        publishFrame(processed, frameCaptureTime);
+        processingLoop_rate.sleep();
     }
 }
 

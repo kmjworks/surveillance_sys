@@ -22,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   sensor_msgs
+  geometry_msgs
   std_msgs
   message_generation
 )
@@ -46,12 +47,14 @@ FetchContent_MakeAvailable(fmt)
 add_message_files(
   FILES
   motion_event.msg
+  motion_detection_events_array.msg
   pipeline_metrics.msg
 )
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
   geometry_msgs
 )
 

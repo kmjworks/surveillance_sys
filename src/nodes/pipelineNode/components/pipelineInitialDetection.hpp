@@ -1,17 +1,30 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-#include <queue>
 #include <mutex>
 
 namespace pipeline {
+    
+    struct TrackedRegion {
+        int identifier;
+        cv::Rect rect;
+        cv::Point2f centroid;
+
+        int frameAge = 0;
+        int consecutiveFrames = 0;
+        int framesSinceSeen = 0;
+        bool continuityConfirmed = false;
+    };
 
     struct DetectionParameters {
+        double adaptiveThresholdBase;
+        double minContourArea;
+        std::pair<double, double> minMaxAspectRatio;
+        
         int samplingRate;
-        int frameCounter;
-        double motionThreshold;
-        double minArea;
-        double aspectRatioThreshold;
+        int maxLostFrames;
+        int minConsecutiveFrames;
+        int nextTrackIdentifier; 
     };
 
     class PipelineInitialDetection {
@@ -20,20 +33,25 @@ namespace pipeline {
             ~PipelineInitialDetection();
 
             bool detectedPotentialMotion(const cv::Mat& frame);
-            bool detectedPotentialMotion(const cv::Mat& frame, std::vector<cv::Rect>& motionRects);
+            bool detectedPotentialMotion(const cv::Mat& frame, std::vector<cv::Rect>& confirmedMotionRects);
 
         private:
             DetectionParameters state;
-            cv::Mat previousFrame;
+            std::vector<TrackedRegion> trackedRegions;
+            std::vector<cv::Rect> regionOfInterestAreas;
             std::mutex frameMtx;
 
-            std::vector<cv::Rect> regionOfInterestAreas;
+            cv::Mat previousFrame;
             bool useRoi = false;
 
-            double calculateFrameDifference(const cv::Mat& currentFrame, const cv::Mat& previousFrame);
-            cv::Mat getThresholdedDifference(const cv::Mat& currentFrame, const cv::Mat& previousFrame);
-            void findMotionRegions(const cv::Mat& thresholdedDifference, std::vector<cv::Rect>& motionRects);
+            cv::Mat getAdaptiveThresholdedDifference(const cv::Mat& currentFrame, const cv::Mat& previousFrame);
             cv::Mat prepareFrameForDifferencing(const cv::Mat& frame);
+
+            double calculateFrameDifference(const cv::Mat& currentFrame, const cv::Mat& previousFrame);
+            void findMotionRegions(const cv::Mat& thresholdedDifference, std::pair<std::vector<cv::Rect>, std::vector<cv::Point2f>>& motionRectsAndCentroids);
+            void updateTrackedRegions(const std::vector<cv::Rect>& currentRects, const std::vector<cv::Point2f>& currentCentroids);
+            void updateTracking(cv::Rect newRect, cv::Point2f newCentroid);
+            void configure(bool useRoi, const std::vector<cv::Rect>& regionsOfInterest);
             
     };
 }
