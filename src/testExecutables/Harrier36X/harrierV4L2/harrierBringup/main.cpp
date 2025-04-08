@@ -241,7 +241,7 @@ private:
 int main(int argc, char **argv) {
     try {
         V4L2Camera camera;
-        std::cout << "V4L2 camera opened successfully" << "\n";
+        std::cout << "[+] V4L2 camera opened." << "\n";
         
         camera.queryCameraCapabilities();
         camera.queryFormats();
@@ -249,14 +249,20 @@ int main(int argc, char **argv) {
         HarrierUSB harrier;
         
         CommandHandler<> cmdHandler(harrier.getHandle());
+
+        if(0) {
+            cmdHandler.executeCommand(HARRIER_POWER_CYCLE, "HARRIER POWER CYCLE");
+        }
         
         cmdHandler.executeCommand(HARRIER_INTERFACE_FW_VER, "HARRIER FW VERSION");
         cmdHandler.executeCommand(HARRIER_INTERFACE_HW_VER, "HARRIER HW VERSION");
         cmdHandler.executeCommand(HARRIER_INTERFACE_HW_STATUS, "HARRIER HW STATUS");
         
         cmdHandler.executeCommand(HARRIER_AUTO_FOCUS, "HARRIER AUTO FOCUS ON");
+        cmdHandler.executeCommand(HARRIER_AF_MODE, "HARRIER AF MODE TO NORMAL");
 
         std::cout << "Commands executed : " << cmdHandler.getCommandCount() << "\n";
+
         
         return 0;
     } catch (const HarrierException& e) {
