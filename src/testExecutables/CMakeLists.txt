@@ -26,8 +26,17 @@ include_directories(
     ${GSTREAMER_INCLUDE_DIRS}
 )
 
+find_library(HARRIER_LIB HarrierCommsUSB
+    PATHS ./Harrier36X/harrierv4l2Bringup/driver
+    REQUIRED
+)   
+
 
 add_executable(harrierBringUpTest "Harrier36X/harrierBringup/main.cpp")
 target_link_libraries(harrierBringUpTest harrierUtils)
 target_compile_features(harrierBringUpTest PRIVATE cxx_std_17)
+
+add_executable(harrierV4L2Bringup "Harrier36X/harrierv4l2Bringup/main.cpp")
+target_link_libraries(harrierV4L2Bringup PRIVATE ${HARRIER_LIB})
+target_compile_features(harrierV4L2Bringup PRIVATE cxx_std_17)
 
