@@ -37,14 +37,12 @@ int main(int argc, char** argv) {
         }
 
         Harrier harrier36x(deviceHandle);
-        internal::ViscaPacket packet;
-        harrier36x.createViscaCommandPacket(HARRIER_POWER_CYCLE, packet);
-        harrier36x.sendCommand(packet);
+        harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_POWER_CYCLE));
 
         return 0;
-        
+
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << "\n";
         return 1;
     }
 }

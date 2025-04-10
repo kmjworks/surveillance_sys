@@ -34,8 +34,8 @@ class Harrier {
         Harrier(HarrierUSBHandle handle);
         ~Harrier();
 
-        void createViscaCommandPacket(const uint8_t* command, internal::ViscaPacket &cmdPacket);
-        void createViscaInquiryPacket(const uint8_t* command, internal::ViscaPacket &inqPacket);
+        internal::ViscaPacket createViscaCommandPacket(const uint8_t* command);
+        internal::ViscaPacket createViscaInquiryPacket(const uint8_t* command);
         void sendCommand(const internal::ViscaPacket& cmdPacket);
         void sendInquiry(const internal::ViscaPacket& inqPacket);
 

@@ -6,7 +6,7 @@
 Harrier::Harrier(HarrierUSBHandle handle) : commsInternal {handle, HarrierCommsOK, std::vector<uint8_t>(128)}  {
    unsigned char bytesTmp = 0;
    
-   std::cout << "Harrier constructor: initializing with handle " << handle << std::endl;
+   std::cout << "Harrier constructor: initializing with handle " << handle << "\n";
    if (handle < 0) {
       throw std::runtime_error("Invalid Harrier USB handle (negative value)");
    }
@@ -23,7 +23,8 @@ Harrier::~Harrier() {
     }
 }
 
-void Harrier::createViscaCommandPacket(const uint8_t* command, internal::ViscaPacket &cmdPacket) {
+internal::ViscaPacket Harrier::createViscaCommandPacket(const uint8_t* command) {
+    internal::ViscaPacket cmdPacket;
     cmdPacket.packet = command;
     cmdPacket.cmdType = internal::CommandType::CONTROL;
     
@@ -32,7 +33,7 @@ void Harrier::createViscaCommandPacket(const uint8_t* command, internal::ViscaPa
         if (command[size] == 0xFF) {
             cmdPacket.packetSize = size + 1;
             getTargetCmdProperties(cmdPacket);
-            return;
+            return cmdPacket;
         }
         size++;
     }
@@ -40,7 +41,8 @@ void Harrier::createViscaCommandPacket(const uint8_t* command, internal::ViscaPa
     throw std::runtime_error("Invalid VISCA command: too long or missing termination");
 }
 
-void Harrier::createViscaInquiryPacket(const uint8_t* command,  internal::ViscaPacket &inqPacket) {
+internal::ViscaPacket Harrier::createViscaInquiryPacket(const uint8_t* command) {
+    internal::ViscaPacket inqPacket;
     inqPacket.packet = command;
     inqPacket.cmdType = internal::CommandType::INQUIRY;
     
@@ -49,7 +51,7 @@ void Harrier::createViscaInquiryPacket(const uint8_t* command,  internal::ViscaP
         if (command[size] == 0xFF) {
             inqPacket.packetSize = size + 1;
             getTargetCmdProperties(inqPacket);
-            return;
+            return inqPacket;
         }
         size++;
     }
