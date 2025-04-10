@@ -24,6 +24,7 @@ include_directories(
     "../components/Harrier36X/CAM_Harrier36X"
     ${OpenCV_INCLUDE_DIRS}
     ${GSTREAMER_INCLUDE_DIRS}
+    ${FMT_LIBS}
 )
 
 find_library(HARRIER_LIB HarrierCommsUSB
@@ -31,12 +32,17 @@ find_library(HARRIER_LIB HarrierCommsUSB
     REQUIRED
 )   
 
+set(SOURCES_V4L2
+    "Harrier36X/harrierV4L2/harrierBringup/HarrierHandler.cpp"
+    "Harrier36X/harrierV4L2/harrierBringup/V4L2Device.cpp"
+)
+
 
 add_executable(harrierBringUpTest "Harrier36X/harrierBringup/main.cpp")
 target_link_libraries(harrierBringUpTest harrierUtils)
 target_compile_features(harrierBringUpTest PRIVATE cxx_std_17)
 
-add_executable(harrierV4L2Bringup "Harrier36X/harrierv4l2Bringup/main.cpp")
-target_link_libraries(harrierV4L2Bringup PRIVATE ${HARRIER_LIB})
+add_executable(harrierV4L2Bringup "Harrier36X/harrierV4L2/harrierBringup/main.cpp" ${SOURCES_V4L2})
+target_link_libraries(harrierV4L2Bringup PRIVATE ${HARRIER_LIB}  fmt::fmt)
 target_compile_features(harrierV4L2Bringup PRIVATE cxx_std_17)
 
