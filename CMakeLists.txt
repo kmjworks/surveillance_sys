@@ -23,11 +23,13 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   sensor_msgs
   geometry_msgs
+  vision_msgs
   std_msgs
   message_generation
 )
 
 find_package(OpenCV REQUIRED)
+find_package(Threads REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0>=1.8)
@@ -139,6 +141,7 @@ link_directories(
 set(COMMON_DEPS
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
+  Threads::Threads
 )
 
 set(GSTREAMER_DEPS
@@ -209,6 +212,10 @@ install(DIRECTORY include/${PROJECT_NAME}/
 install(DIRECTORY launch/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
   FILES_MATCHING PATTERN "*.launch"
+)
+
+catkin_install_python(PROGRAMS scripts/yolo_node.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 if(CATKIN_ENABLE_TESTING)

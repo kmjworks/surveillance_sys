@@ -17,6 +17,18 @@
     <param name="buffer_size" value="100"/>
     <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
   </node>
+
+  <node pkg="surveillance_system" type="yolo_node.py" name="objectDetectionNode" output="screen">
+    <param name="model_filename" value="yolov11_trained.pt" />
+    <param name="yolo_repo_location" value="tools/yolov5" /> 
+    <param name="input_topic" value="pipeline/runtime_potentialMotionEvents" />
+    <param name="detection_topic" value="yolo/runtime_detections" />
+    <param name="visualization_topic" value="yolo/runtime_detectionVisualizationDebug" />
+    <param name="confidence_threshold" value="0.4" />
+    <param name="device" value="cuda" /> <param name="enable_visualization" value="true" />
+    <param name="enable_logging" value="true" />
+    <param name="log_dir" value="/tmp/yolo_detections" /> 
+  </node>
   
   <!-- Image Visualization Nodes -->
   <node pkg="image_view" type="image_view" name="pipeline_view">
