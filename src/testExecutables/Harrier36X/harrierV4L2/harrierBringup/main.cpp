@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
             std::cerr << "Failed to retrieve Harrier's USB handle, error code: " << status << std::endl;
             return 1;
         }
-
+        
         Harrier harrier36x(deviceHandle);
         harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_POWER_CYCLE));
 
