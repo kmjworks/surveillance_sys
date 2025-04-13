@@ -1,9 +1,45 @@
 <launch>
-    <!-- Parameters -->
-    <rosparam command="load" file="$(find surveillance_system)/config/system_params.yaml" />
+  <!-- Parameters -->
+  <rosparam command="load" file="$(find surveillance_system)/config/system_params.yaml" />
+  
+  <!-- Nodes -->
+  <node pkg="surveillance_system" type="camera_node" name="cameraNode" output="screen">
+    <param name="frame_rate" value="30"/>
+  </node>
+  
+  <!-- Pipeline Node -->
+  <node pkg="surveillance_system" type="video_pipeline_node" name="pipelineNode" output="screen">
+    <param name="device_path" value="/dev/video0"/>
+    <param name="frame_rate" value="60"/>
+    <param name="night_mode" value="false"/>
+    <param name="show_debug_frames" value="true"/>
+    <param name="motion_sampling_rate" value="1"/>
+    <param name="buffer_size" value="100"/>
+    <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
+  </node>
 
-    <!-- Nodes -->
-    <node pkg="surveillance_system" type="camera_node" name="camera_node" output="screen">
-        <param name="frame_rate" value="30"/>
-    </node>
+  <node pkg="surveillance_system" type="yolo_node.py" name="objectDetectionNode" output="screen">
+    <param name="model_filename" value="yolov11_trained.pt" />
+    <param name="yolo_repo_location" value="tools/yolov5" /> 
+    <param name="input_topic" value="pipeline/runtime_potentialMotionEvents" />
+    <param name="detection_topic" value="yolo/runtime_detections" />
+    <param name="visualization_topic" value="yolo/runtime_detectionVisualizationDebug" />
+    <param name="confidence_threshold" value="0.4" />
+    <param name="device" value="cuda" /> <param name="enable_visualization" value="true" />
+    <param name="enable_logging" value="true" />
+    <param name="log_dir" value="/tmp/yolo_detections" /> 
+  </node>
+  
+  <!-- Image Visualization Nodes -->
+  <node pkg="image_view" type="image_view" name="pipeline_view">
+    <remap from="image" to="pipeline/runtime_processedFrames"/>
+  </node>
+  
+  <!-- Motion Event Visualization -->
+  <node pkg="image_view" type="image_view" name="motion_event_view">
+    <remap from="image" to="pipeline/runtime_potentialMotionEvent"/>
+  </node>
+  
+  <!-- RViz for visualization -->
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find surveillance_system)/config/pipeline_config.rviz"/>
 </launch>

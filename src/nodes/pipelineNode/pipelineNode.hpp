@@ -1,41 +1,73 @@
-#include <queue>
-#include <string>
-
-#include <cv_bridge/cv_bridge.h>
-#include <opencv2/opencv.hpp>
-#include "opencv2/videoio.hpp"
+#pragma once
 
 #include <ros/ros.h>
-#include "ros/console.h"
-#include "ros/node_handle.h"
-#include "ros/subscriber.h"
-
 #include <sensor_msgs/Image.h>
-#include <surveillance_system/motion_event.h>
+#include <std_msgs/String.h>
+#include <opencv2/opencv.hpp>
+#include <cv_bridge/cv_bridge.h>
+#include <mutex>
+#include <atomic>
+#include <thread>
+#include <string>
+#include <memory>
 
-namespace internal {
-struct ROSInterface {
-    ros::Subscriber sub_motionEvents;
-    ros::Subscriber sub_rawImageData;
-};
-}  // namespace internal
+
+namespace pipeline {
+    class HarrierCaptureSrc;
+    class PipelineInternal;
+    class PipelineInitialDetection;
+
+    struct ROSInterface {
+        ros::Publisher pub_motionEvents;
+        ros::Publisher pub_processedFrames;
+        ros::Publisher pub_runtimeErrors;
+    };
+
+    struct PipelineComponents {
+        std::unique_ptr<HarrierCaptureSrc> cameraSrc;
+        std::unique_ptr<PipelineInternal> pipelineInternal;
+        std::unique_ptr<PipelineInitialDetection> pipelineIntegratedMotionDetection;
+    };
+
+    struct ConfigurationParameters {
+        int frameRate;
+        int motionSamplingRate;
+        int bufferSize;
+
+        bool nightMode;
+        bool showDebugFrames;
+        
+        std::string devicePath;
+        std::string outputPath;
+    };
+}
 
 class PipelineNode {
-public:
-    PipelineNode(ros::NodeHandle nh);
-    cv::VideoWriter videoWriterForSimulation;
-    internal::ROSInterface ROSInternalInterface;
+    public:
+        PipelineNode(ros::NodeHandle& nh, ros::NodeHandle& privateHandle);
+        ~PipelineNode();
 
-private:
-    ros::NodeHandle nh;
-    bool videoWriterStatus;
-    int videoWriterBufferSize;
+        bool initializePipelineNode();
+        void shutdown();
 
-    std::string outputPath;
-    ros::Time lastMotionEventRegistered;
-    std::queue<cv::Mat> frameBuffer;
+    private:
+        ros::NodeHandle& nh;
+        ros::NodeHandle& nh_priv;
 
-    void videoWriterRecording(bool start, uint32_t motionEventID);
-    void cb_imageData(const sensor_msgs::ImageConstPtr& msg);
-    void cb_motionEvent(const surveillance_system::motion_event::ConstPtr& msg);
+        pipeline::ROSInterface rosInterface;
+        pipeline::PipelineComponents components;
+        pipeline::ConfigurationParameters params;
+
+        std::atomic<bool> pipelineRunning;
+        std::mutex frameMtx;
+        std::thread pipelineProcessingThread;
+
+        void loadParameters();
+        void processFrames();
+        void publishFrame(const cv::Mat& frame, const ros::Time& timestamp);
+        void publishError(const std::string& errorMsg);
+        void startProcessingThread();
+        void stopProcessingThread();
+
+
 };

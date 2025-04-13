@@ -5,7 +5,7 @@
 
     <!-- Camera Node -->
     <node pkg="surveillance_system" 
-          type="cameraNode" 
+          type="camera_node" 
           name="cameraNode" 
           output="screen">
         <param name="frame_width" value="1920"/>
@@ -15,7 +15,7 @@
 
     <!-- Motion Detector Node -->
     <node pkg="surveillance_system" 
-          type="motionDetectionNode" 
+          type="motion_detection_node" 
           name="motionDetectionNode" 
           output="screen">
         <param name="detection_threshold" value="30.0"/>
@@ -23,23 +23,29 @@
 
     <!-- Capture Manager Node -->
     <node pkg="surveillance_system" 
-          type="pipelineNode" 
+          type="video_pipeline_node" 
           name="pipelineNode" 
           output="screen">
         <param name="buffer_size" value="30"/>
         <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
     </node>
 
-    <!-- Image isualization Nodes -->
+    <!-- Image Visualization Nodes -->
     <node pkg="image_view" 
           type="image_view" 
           name="raw_view">
-        <remap from="image" to="/camera_node/image_raw"/>
+        <remap from="image" to="/cameraNode/image_raw"/>
     </node>
     
     <node pkg="image_view" 
           type="image_view" 
           name="debug_view">
-        <remap from="image" to="/motion_detector_node/debug_image"/>
+        <remap from="image" to="/motionDetectionNode/debug_image"/>
+    </node>
+    
+    <node pkg="image_view" 
+          type="image_view" 
+          name="pipeline_view">
+        <remap from="image" to="/pipelineNode/pipeline/runtime_processedFrames"/>
     </node>
 </launch>
