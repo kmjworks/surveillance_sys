@@ -28,7 +28,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc cudaimgproc cudabgsegm)
 find_package(Threads REQUIRED)
 
 find_package(PkgConfig REQUIRED)
