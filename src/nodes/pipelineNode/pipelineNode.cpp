@@ -37,7 +37,7 @@ bool PipelineNode::initializePipelineNode() {
 
     components.cameraSrc = std::make_unique<pipeline::HarrierCaptureSrc>(params.devicePath, params.frameRate, params.nightMode);
     components.pipelineInternal = std::make_unique<pipeline::PipelineInternal>(params.frameRate, params.nightMode);
-    components.pipelineIntegratedMotionDetection = std::make_unique<pipeline::PipelineInitialDetection>(params.motionSamplingRate);
+    components.pipelineIntegratedMotionDetection = std::make_unique<pipeline::PipelineInitialDetectionLite>(800, 0.5f, 120, 2);
 
     if(!components.cameraSrc->initializeRawSrcForCapture()) {
         publishError("Failed to initialize camera after multiple attempts.");
@@ -139,7 +139,7 @@ void PipelineNode::processFrames() {
             processed = components.pipelineInternal->processFrame(raw);
             
             if(!processed.empty()) {
-                motionPresence = components.pipelineIntegratedMotionDetection->detectedPotentialMotion(processed, motionRects);
+                motionPresence = components.pipelineIntegratedMotionDetection->detect(processed, motionRects);
 
                 if(motionPresence && !motionRects.empty()) {
                     for(const auto& rect : motionRects) {
