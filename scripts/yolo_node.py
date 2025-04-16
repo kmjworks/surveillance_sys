@@ -156,8 +156,7 @@ class YoloNode:
 
                     # Detection2D message creation for coordinates
                     detection = Detection2D()
-                    detection.header = msg.header # Use the original image header
-                    # Bounding box
+                    detection.header = msg.header 
                     detection.bbox.center.x = float((x1 + x2) / 2)
                     detection.bbox.center.y = float((y1 + y2) / 2)
                     detection.bbox.size_x = float(x2 - x1)
