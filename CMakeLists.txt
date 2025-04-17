@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.10)
 project(surveillance_system VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -28,7 +27,8 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
-find_package(OpenCV REQUIRED)
+find_package(CUDA REQUIRED)
+find_package(OpenCV 4.10.0 REQUIRED COMPONENTS core imgproc cudaimgproc cudabgsegm)
 find_package(Threads REQUIRED)
 
 find_package(PkgConfig REQUIRED)
@@ -112,7 +112,7 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS cv_bridge image_transport roscpp rospy sensor_msgs std_msgs
-  DEPENDS OpenCV
+  DEPENDS OpenCV 4.10 CUDA
 )
 
 # ##########
@@ -129,6 +129,7 @@ include_directories(
   ${GST_VIDEO_INCLUDE_DIRS}
   ${GLIB_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${CUDA_INCLUDE_DIRS}
 )
 
 link_directories(
@@ -179,6 +180,7 @@ add_executable(video_pipeline_node
   src/nodes/pipelineNode/pipelineNode.cpp 
   src/nodes/pipelineNode/components/pipelineInternal.cpp 
   src/nodes/pipelineNode/components/pipelineInitialDetection.cpp
+  src/nodes/pipelineNode/components/pipelineInitialDetectionLite.cpp
   src/nodes/pipelineNode/components/harrierCaptureSrc.cpp  
 )
 add_dependencies(video_pipeline_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
