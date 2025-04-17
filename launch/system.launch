@@ -26,7 +26,7 @@
     <param name="visualization_topic" value="yolo/runtime_detectionVisualizationDebug" />
     <param name="confidence_threshold" value="0.4" />
     <param name="device" value="cuda" /> <param name="enable_visualization" value="true" />
-    <param name="enable_logging" value="true" />
+    <param name="enable_logging" value="false" />
     <param name="log_dir" value="/tmp/yolo_detections" /> 
   </node>
   

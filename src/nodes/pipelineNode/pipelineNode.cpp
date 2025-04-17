@@ -1,7 +1,7 @@
 #include "pipelineNode.hpp"
 #include "components/harrierCaptureSrc.hpp"
 #include "components/pipelineInternal.hpp"
-#include "components/pipelineInitialDetection.hpp"
+#include "components/pipelineInitialDetectionLite.hpp"
 
 //#include "surveillance_system/motion_detection_events_array.h"
 // #include "surveillance_system/motion_event.h"

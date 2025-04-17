@@ -15,7 +15,7 @@
 namespace pipeline {
     class HarrierCaptureSrc;
     class PipelineInternal;
-    class PipelineInitialDetection;
+    class PipelineInitialDetectionLite;
 
     struct ROSInterface {
         ros::Publisher pub_motionEvents;
@@ -26,7 +26,7 @@ namespace pipeline {
     struct PipelineComponents {
         std::unique_ptr<HarrierCaptureSrc> cameraSrc;
         std::unique_ptr<PipelineInternal> pipelineInternal;
-        std::unique_ptr<PipelineInitialDetection> pipelineIntegratedMotionDetection;
+        std::unique_ptr<PipelineInitialDetectionLite> pipelineIntegratedMotionDetection;
     };
 
     struct ConfigurationParameters {

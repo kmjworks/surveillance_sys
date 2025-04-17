@@ -24,8 +24,8 @@ namespace pipeline {
         int frameCounter;
 
         /* state */
-        cv::Ptr<cv::cuda::BackgroundSubtractorFGD> bgsub_;   // GPU bg‑subtract
-        cv::cuda::GpuMat gpuIn_, gpuFg_;
+        cv::Ptr<cv::cuda::BackgroundSubtractorMOG2> bgsub;
+        cv::cuda::GpuMat gpuIn, gpuFg;
 
         std::mutex mtx; 
     };
