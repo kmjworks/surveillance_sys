@@ -11,6 +11,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 # Enable compiler warnings and export compile commands for tools like clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-Wall -Wextra -Wpedantic)
@@ -28,7 +31,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(CUDA REQUIRED)
-find_package(OpenCV 4.10.0 REQUIRED COMPONENTS core imgproc cudaimgproc cudabgsegm)
+find_package(OpenCV 4.10.0 REQUIRED COMPONENTS core dnn imgproc cudaimgproc cudabgsegm)
 find_package(Threads REQUIRED)
 
 find_package(PkgConfig REQUIRED)
@@ -112,7 +115,7 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS cv_bridge image_transport roscpp rospy sensor_msgs std_msgs
-  DEPENDS OpenCV 4.10 CUDA
+  DEPENDS OpenCV CUDA
 )
 
 # ##########
@@ -130,6 +133,7 @@ include_directories(
   ${GLIB_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${CUDA_INCLUDE_DIRS}
+  ${TensorRT_INCLUDE_DIRS}
 )
 
 link_directories(
@@ -156,14 +160,21 @@ set(GSTREAMER_DEPS
 # # Declare a C++ executable
 # # With catkin_make all packages are built within a single CMake context
 # # The recommended prefix ensures that target names across packages don't collide
+
 add_executable(motion_detection_node 
-  src/nodes/motionDetectionNode/motionDetectionNode.cpp 
+  src/nodes/motionDetectionNode/motionDetectionNode_trt.cpp 
   src/nodes/motionDetectionNode/main.cpp
 )
+
 add_dependencies(motion_detection_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(motion_detection_node
   ${COMMON_DEPS}
   fmt::fmt
+  ${CUDA_LIBRARIES}
+  #${TensorRT_LIBRARIES}
+  nvinfer
+  nvinfer_plugin
+  nvonnxparser
 )
 
 add_executable(camera_node 
@@ -216,9 +227,9 @@ install(DIRECTORY launch/
   FILES_MATCHING PATTERN "*.launch"
 )
 
-catkin_install_python(PROGRAMS scripts/yolo_node.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+## catkin_install_python(PROGRAMS scripts/yolo_node.py
+## DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+## )
 
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(pipeline_test
