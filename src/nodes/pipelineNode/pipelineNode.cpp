@@ -151,7 +151,7 @@ void PipelineNode::processFrames() {
         }
 
         if(!processed.empty()) {
-            publishFrame(processed, frameCaptureTime);
+            publishFrame(raw, frameCaptureTime);
         }
 
         if(motionPresence) { 
