@@ -14,6 +14,7 @@
 #include <string>
 #include <memory>
 
+#include "components/utilities/ThreadSafeQueue/ThreadSafeQueue.hpp"
 
 namespace pipeline {
     class HarrierCaptureSrc;
@@ -45,6 +46,11 @@ namespace pipeline {
         std::string devicePath;
         std::string outputPath;
     };
+
+    struct FrameData {
+        cv::Mat frame;
+        ros::Time timestamp;
+    };
 }
 
 class PipelineNode {
@@ -62,19 +68,21 @@ class PipelineNode {
         pipeline::ROSInterface rosInterface;
         pipeline::PipelineComponents components;
         pipeline::ConfigurationParameters params;
+        ThreadSafeQueue<pipeline::FrameData> rawFrameQueue;
 
+        std::thread captureThread;
+        std::thread processingThread;
         std::atomic<bool> pipelineRunning;
-        std::atomic<bool> stopPipelineThreads{false};
-        std::thread pipelineProcessingThread;
-        std::thread pipelineCaptureThread;
-        std::mutex frameQueueMtx;
+
+        void publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp);
+        void publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp);
+        void publishError(const std::string& errorMsg);
 
         void loadParameters();
         void processFrames();
-        void publishFrame(const cv::Mat& frame, const ros::Time& timestamp);
-        void publishError(const std::string& errorMsg);
-        void startProcessingThread();
-        void stopProcessingThread();
+        void captureLoop();
+        void startWorkerThreads();
+        void stopWorkerThreads();
 
 
 };
