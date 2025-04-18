@@ -3,8 +3,11 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <std_msgs/String.h>
+
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
+
 #include <mutex>
 #include <atomic>
 #include <thread>
@@ -18,9 +21,11 @@ namespace pipeline {
     class PipelineInitialDetectionLite;
 
     struct ROSInterface {
-        ros::Publisher pub_motionEvents;
-        ros::Publisher pub_processedFrames;
         ros::Publisher pub_runtimeErrors;
+        image_transport::ImageTransport imageTransport;
+        image_transport::Publisher pub_processedFrames;
+        image_transport::Publisher pub_motionEvents;
+
     };
 
     struct PipelineComponents {
@@ -59,8 +64,10 @@ class PipelineNode {
         pipeline::ConfigurationParameters params;
 
         std::atomic<bool> pipelineRunning;
-        std::mutex frameMtx;
+        std::atomic<bool> stopPipelineThreads{false};
         std::thread pipelineProcessingThread;
+        std::thread pipelineCaptureThread;
+        std::mutex frameQueueMtx;
 
         void loadParameters();
         void processFrames();
