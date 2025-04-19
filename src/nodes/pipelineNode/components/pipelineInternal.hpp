@@ -16,13 +16,13 @@ namespace pipeline {
             PipelineInternal(int frameRate, bool nightMode);
             ~PipelineInternal();
 
+            /*
+                processFrame and convertFormat made public for unit testing
+            */
             cv::Mat processFrame(const cv::Mat& frame);
-
-        private:
-            State state;
-
             cv::Mat convertFormat(const cv::Mat& frame);
             cv::Mat preprocessFrame(const cv::Mat& frame);
-
+        private:
+            State state;
     };
 }

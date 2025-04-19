@@ -234,6 +234,8 @@ install(DIRECTORY launch/
 
 if(CATKIN_ENABLE_TESTING)
   find_package(GTest REQUIRED)
+  find_package(rostest REQUIRED)
+
   catkin_add_gtest(thread_safe_queue_test
     test/utilities/test_threadSafeQueue.cpp
   )
@@ -242,5 +244,18 @@ if(CATKIN_ENABLE_TESTING)
     Threads::Threads
     ${GTEST_LIBRARIES}
   )
+
+  catkin_add_gtest(pipeline_internal_test
+    test/pipeline/test_pipelineInternal.cpp
+    src/nodes/pipelineNode/components/pipelineInternal.cpp 
+  )
+  target_link_libraries(pipeline_internal_test
+    ${catkin_LIBRARIES}
+    ${OpenCV_LIBRARIES} 
+    Threads::Threads
+    ${GTEST_LIBRARIES}
+  )
+
+
 endif()
 
