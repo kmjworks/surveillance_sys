@@ -61,6 +61,10 @@ class PipelineNode {
         ~PipelineNode();
 
         bool initializePipelineNode();
+        /*
+            loadParameters made public for unit testing
+        */
+        static int loadParameters(ros::NodeHandle& nh_priv, pipeline::ConfigurationParameters& parametersToLoad); // hack
         void shutdown();
 
     private:
@@ -80,8 +84,6 @@ class PipelineNode {
         void publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishError(const std::string& errorMsg);
-
-        static int loadParameters(ros::NodeHandle& nh_priv, pipeline::ConfigurationParameters& parametersToLoad); // hack
         void processFrames();
         void captureLoop();
         void processingLoop();

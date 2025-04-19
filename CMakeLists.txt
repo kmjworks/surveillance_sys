@@ -236,6 +236,7 @@ if(CATKIN_ENABLE_TESTING)
   find_package(GTest REQUIRED)
   find_package(rostest REQUIRED)
 
+  ## Utility tests
   catkin_add_gtest(thread_safe_queue_test
     test/utilities/test_threadSafeQueue.cpp
   )
@@ -245,6 +246,7 @@ if(CATKIN_ENABLE_TESTING)
     ${GTEST_LIBRARIES}
   )
 
+  ## Pipeline tests
   catkin_add_gtest(pipeline_internal_test
     test/pipeline/test_pipelineInternal.cpp
     src/nodes/pipelineNode/components/pipelineInternal.cpp 
@@ -252,6 +254,22 @@ if(CATKIN_ENABLE_TESTING)
   target_link_libraries(pipeline_internal_test
     ${catkin_LIBRARIES}
     ${OpenCV_LIBRARIES} 
+    Threads::Threads
+    ${GTEST_LIBRARIES}
+  )
+
+  catkin_add_gtest(pipeline_parameter_test
+    test/pipeline/test_pipelineParameterLoading.cpp
+    src/nodes/pipelineNode/pipelineNode.cpp 
+    src/nodes/pipelineNode/components/pipelineInternal.cpp 
+    src/nodes/pipelineNode/components/pipelineInitialDetection.cpp
+    src/nodes/pipelineNode/components/pipelineInitialDetectionLite.cpp
+    src/nodes/pipelineNode/components/harrierCaptureSrc.cpp
+  )
+
+  target_link_libraries(pipeline_parameter_test
+    ${COMMON_DEPS}
+    ${GSTREAMER_DEPS}
     Threads::Threads
     ${GTEST_LIBRARIES}
   )

@@ -53,13 +53,13 @@ bool PipelineNode::initializePipelineNode() {
 }
 
 int PipelineNode::loadParameters(ros::NodeHandle& nh_priv, pipeline::ConfigurationParameters& params) {
-    nh_priv.param<std::string>("device_path", params.devicePath, params.devicePath);
-    nh_priv.param<int>("frame_rate", params.frameRate, params.frameRate);
+    nh_priv.param<std::string>("device_path", params.devicePath, "/dev/video0");
+    nh_priv.param<int>("frame_rate", params.frameRate, 30);
     nh_priv.param<bool>("night_mode", params.nightMode, params.nightMode);
     nh_priv.param<bool>("show_debug_frames", params.showDebugFrames, params.showDebugFrames);
     nh_priv.param<int>("motion_sampling_rate", params.motionSamplingRate, params.motionSamplingRate);
     nh_priv.param<std::string>("output_path", params.outputPath, params.outputPath);
-
+    nh_priv.param<int>("buffer_size", params.bufferSize, 10);
     nh_priv.param<int>("motion_detector/min_area_px", params.motionMinAreaPx, params.motionMinAreaPx);
     nh_priv.param<float>("motion_detector/downscale", params.motionDownScale, params.motionDownScale);
     nh_priv.param<int>("motion_detector/history", params.motionHistory, params.motionHistory);
