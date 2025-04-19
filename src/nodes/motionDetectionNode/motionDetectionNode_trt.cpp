@@ -1,58 +1,26 @@
 #include "motionDetectionNode_trt.hpp"
 
-MotionDetectionNode::MotionDetectionNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
-    : imageTransport(nh) {
 
-    pnh.param("engine_file", enginePath, std::string("models/yolov11_fp16.engine"));
-    pnh.param("confidence_threshold", confidenceThreshold, 0.4F);
-    pnh.param("enable_viz", enableViz, true);
-    pnh.param("input_w", inputWidth, 640);
-    pnh.param("input_h", inputHeight, 640);
+class Logger : public nvinfer1::ILogger {
+    public:
+        void log(Severity severity, const char* msg) noexcept override {
+            if(severity == Severity::kINFO) return;
+            ROS_INFO("[MotionDetectionNode - TensorRT] %s", msg);
+        }
+};
 
-    runtime = nvinfer1::createInferRuntime(gLogger);
-    if (!runtime)
-        throw std::runtime_error("Failed to create TensorRT runtime");
+static Logger gLoggerInstance;
+nvinfer1::ILogger& gLogger = gLoggerInstance;
 
-    std::ifstream f(enginePath, std::ios::binary | std::ios::ate);
-    if (!f.good())
-        throw std::runtime_error("Cannot open engine file: " + enginePath);
-    size_t engSize = f.tellg();
-    f.seekg(0);
-    std::vector<char> engData(engSize);
-    f.read(engData.data(), engSize);
+MotionDetectionNode::MotionDetectionNode(ros::NodeHandle& nh, ros::NodeHandle& pnh) : nh(nh), private_nh(pnh), imageTransport(nh) {
 
-    engine = runtime->deserializeCudaEngine(engData.data(), engSize, nullptr);
-    if (!engine)
-        throw std::runtime_error("Engine deserialisation failed");
-    ctx = engine->createExecutionContext();
-    if (!ctx)
-        throw std::runtime_error("Failed to create execution context");
+    pnh.param("engine_file", runtimeConfiguration.enginePath, std::string("models/yolov11_fp16.engine"));
+    pnh.param("confidence_threshold", runtimeConfiguration.confidenceThreshold, 0.6F);
+    pnh.param("enable_viz", runtimeDebugConfiguration.enableViz, true);
+    pnh.param("input_w", runtimeConfiguration.inputWidth, 640);
+    pnh.param("input_h", runtimeConfiguration.inputHeight, 640);
 
-    const int inIdx = engine->getBindingIndex("images");
-    const int outIdx = engine->getBindingIndex("output0");
-    auto outDims = engine->getBindingDimensions(outIdx);
-
-    const size_t inBytes = 1 * 3 * inputHeight * inputWidth * sizeof(float);
-    outputSize = 1;
-    for (int i = 0; i < outDims.nbDims; ++i)
-        outputSize *= outDims.d[i];
-    outputSize *= sizeof(float);
-
-    cudaMalloc(&gpuBuffers[inIdx], inBytes);
-    cudaMalloc(&gpuBuffers[outIdx], outputSize);
-    cudaStreamCreate(&stream);
-
-    sub_imageSrc = imageTransport.subscribe("pipeline/runtime_potentialMotionEvents", 1,
-                                            &MotionDetectionNode::imageCb, this,
-                                            image_transport::TransportHints("raw"));
-
-    pub_detectedMotion = nh.advertise<vision_msgs::Detection2DArray>("yolo/runtime_detections", 10);
-
-    if (enableViz)
-        pub_vizDebug =
-            nh.advertise<sensor_msgs::Image>("yolo/runtime_detectionVisualizationDebug", 1);
-
-    ROS_INFO("[MotionDetectionNode-TRT] ready - engine: %s", enginePath.c_str());
+    ROS_INFO("[MotionDetectionNode- TensorRT] ready - engine: %s", enginePath.c_str());
 }
 
 MotionDetectionNode::~MotionDetectionNode() {
@@ -69,6 +37,40 @@ MotionDetectionNode::~MotionDetectionNode() {
         runtime->destroy();
 }
 
+void MotionDetectionNode::initEngine() {
+    engineInterface.runtime.reset(nvinfer1::createInferRuntime(gLogger));
+    if(not engineInterface.runtime) throw std::runtime_error("[MotionDetectionNode- TensorRT] Runtime creation failed.");
+
+    std::ifstream f(runtimeConfiguration.enginePath, std::ios::binary | std::ios::ate);
+    if(not f) throw std::runtime_error("[MotionDetectionNode- TensorRT] Failed to open engine file: " + runtimeConfiguration.enginePath);
+
+    size_t engineSize = f.tellg(); f.seekg(0);
+    std::vector<char> engineData(engineSize);
+    f.read(engineData.data(), engineSize);
+
+    engineInterface.engine.reset(engineInterface.runtime->deserializeCudaEngine(engineData.data(), engineSize, nullptr));
+    if(not engineInterface.engine) throw std::runtime_error("[MotionDetectionNode- TensorRT] Engine deserialisation failed.");
+
+    engineInterface.ctx.reset(engineInterface.engine->createExecutionContext());
+    if(not engineInterface.ctx) throw std::runtime_error("[MotionDetectionNode- TensorRT] Execution context creation failed.");
+
+    const int inIdx = engineInterface.engine->getBindingIndex("images");
+    const int outIdx = engineInterface.engine->getBindingIndex("output0");
+
+    auto outDims = engineInterface.engine->getBindingDimensions(outIdx);
+    const size_t inBytes = 1 * 3 * runtimeConfiguration.inputHeight * runtimeConfiguration.inputWidth * sizeof(float);
+
+    runtimeConfiguration.outputSize = 1;
+    for (int i = 0; i < outDims.nbDims; ++i) {
+        runtimeConfiguration.outputSize *= outDims.d[i];
+    }
+    runtimeConfiguration.outputSize *= sizeof(float);
+
+    cudaMalloc(&runtimeConfiguration.gpuBuffers[inIdx], inBytes);
+    cudaMalloc(&runtimeConfiguration.gpuBuffers[outIdx], runtimeConfiguration.outputSize);
+    cudaStreamCreate(&engineInterface.stream);
+}
+
 void MotionDetectionNode::imageCb(const sensor_msgs::ImageConstPtr& msg) {
     cv_bridge::CvImageConstPtr cvPtr;
     try {
@@ -78,79 +80,6 @@ void MotionDetectionNode::imageCb(const sensor_msgs::ImageConstPtr& msg) {
         return;
     }
 
-    cv::Mat hostInput = preProcess(cvPtr->image);
-
-    cudaMemcpyAsync(gpuBuffers[0], hostInput.data, hostInput.total() * sizeof(float),
-                    cudaMemcpyHostToDevice, stream);
-    ctx->enqueue(1, gpuBuffers, stream, nullptr);
-    std::vector<float> out(outputSize / sizeof(float));
-    cudaMemcpyAsync(out.data(), gpuBuffers[1], outputSize, cudaMemcpyDeviceToHost, stream);
-    cudaStreamSynchronize(stream);
-
-    vision_msgs::Detection2DArray arr;
-    arr.header = msg->header;
-    arr.detections = postProcess(out.data());
-    if (!arr.detections.empty())
-        pub_detectedMotion.publish(arr);
-
-    if (enableViz && pub_vizDebug.getNumSubscribers() > 0 && !arr.detections.empty()) {
-
-        /*
-           Draw on a *copy* of the input image to avoid modifying the shared pointer's data,
-           cvPtr->image is a const, so clone is necessary anyway.        
-        */
-        cv::Mat viz = cvPtr->image.clone();
-        if (viz.channels() == 1) {
-            cv::cvtColor(viz, viz, cv::COLOR_GRAY2BGR);
-        }
-
-        for (const auto& d : arr.detections) {
-            float x_center = d.bbox.center.x;
-            float y_center = d.bbox.center.y;
-            float w = d.bbox.size_x;
-            float h = d.bbox.size_y;
-            int x1 = static_cast<int>(x_center - w / 2.0f);
-            int y1 = static_cast<int>(y_center - h / 2.0f);
-            int x2 = static_cast<int>(x_center + w / 2.0f);
-            int y2 = static_cast<int>(y_center + h / 2.0f);
-
-            x1 = std::max(0, std::min(x1, viz.cols - 1));
-            y1 = std::max(0, std::min(y1, viz.rows - 1));
-            x2 = std::max(0, std::min(x2, viz.cols - 1));
-            y2 = std::max(0, std::min(y2, viz.rows - 1));
-
-            cv::rectangle(viz, {x1, y1}, {x2, y2}, cv::Scalar(0, 255, 0), 2);
-
-            std::string label = "Human";
-            float confidence = 0.0f;
-            if (!d.results.empty()) {
-                confidence = d.results[0].score;
-            }
-            label += ": " + cv::format("%.2f", confidence); 
-
-            int baseline = 0;
-            cv::Size labelSize =
-                cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
-            int label_y = std::max(
-                y1, labelSize.height + 5); 
-            cv::Point label_origin = cv::Point(x1, label_y - 5);  
-
-
-            cv::rectangle(
-                viz, cv::Point(label_origin.x, label_origin.y + baseline),
-                cv::Point(label_origin.x + labelSize.width, label_origin.y - labelSize.height),
-                cv::Scalar(0, 100, 0),  
-                cv::FILLED);
-
-            cv::putText(viz, label, label_origin, cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                        cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
-        }
-
-        vizImg.image = viz;
-        vizImg.encoding = sensor_msgs::image_encodings::BGR8;
-        vizImg.header = msg->header; 
-        pub_vizDebug.publish(vizImg.toImageMsg());
-    }
 }
 
 cv::Mat MotionDetectionNode::preProcess(const cv::Mat& img) {

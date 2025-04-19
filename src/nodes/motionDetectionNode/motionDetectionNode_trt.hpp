@@ -15,13 +15,37 @@
 #include <string>
 #include <vector>
 
-class TrtLogger : public nvinfer1::ILogger {
-public:
-    void log(Severity s, const char* msg) noexcept override {
-        if (s <= Severity::kWARNING)
-            ROS_INFO_STREAM_NAMED("TensorRT", msg);
-    }
-};
+extern nvinfer1::ILogger& gLogger;
+
+namespace motion_detection {
+    struct ROSInterface {
+        image_transport::Subscriber sub_imageSrc;
+        ros::Publisher pub_detectedMotion;
+        ros::Publisher pub_vizDebug;
+    };
+    
+    struct RuntimeConfiguration {
+        std::string enginePath;
+        float confidenceThreshold{0.6F};
+        int inputWidth{640};
+        int inputHeight{640};
+        void* gpuBuffers[2]{};
+        size_t outputSize{0}; 
+    };
+    
+    struct TensorRTInterface {
+        std::unique_ptr<nvinfer1::IRuntime, void(*)(nvinfer1::IRuntime*)> runtime{nullptr, [](nvinfer1::IRuntime* p){ if (p) p->destroy(); }};
+        std::unique_ptr<nvinfer1::ICudaEngine, void(*)(nvinfer1::ICudaEngine*)> engine{nullptr, [](nvinfer1::ICudaEngine* p){ if (p) p->destroy(); }};
+        std::unique_ptr<nvinfer1::IExecutionContext, void(*)(nvinfer1::IExecutionContext*)> ctx{nullptr, [](nvinfer1::IExecutionContext* p){ if (p) p->destroy(); }};
+
+        cudaStream_t stream{};
+    };
+    
+    struct DebugConfiguration {
+        bool enableViz{true};
+        cv_bridge::CvImage vizImg;
+    };    
+}
 
 class MotionDetectionNode {
 public:
@@ -29,27 +53,15 @@ public:
     ~MotionDetectionNode();
 
 private:
+    ros::NodeHandle nh;
+    ros::NodeHandle private_nh;
     image_transport::ImageTransport imageTransport;
-    image_transport::Subscriber sub_imageSrc;
-    ros::Publisher pub_detectedMotion;
-    ros::Publisher pub_vizDebug;
-    cv_bridge::CvImage vizImg;
+    motion_detection::ROSInterface rosInterface;
+    motion_detection::TensorRTInterface engineInterface;
+    motion_detection::RuntimeConfiguration runtimeConfiguration;
+    motion_detection::DebugConfiguration runtimeDebugConfiguration;
 
-    std::string enginePath;
-    float confidenceThreshold{0.4F};
-    bool enableViz{true};
-    int inputWidth{640};
-    int inputHeight{640};
-
-  
-    TrtLogger gLogger;
-    nvinfer1::IRuntime* runtime{nullptr};
-    nvinfer1::ICudaEngine* engine{nullptr};
-    nvinfer1::IExecutionContext* ctx{nullptr};
-    cudaStream_t stream{};
-    void* gpuBuffers[2]{};
-    size_t outputSize{0};  
-
+    void initEngine();
     void imageCb(const sensor_msgs::ImageConstPtr& msg);
     cv::Mat preProcess(const cv::Mat& img);
     std::vector<vision_msgs::Detection2D> postProcess(const float* out);
