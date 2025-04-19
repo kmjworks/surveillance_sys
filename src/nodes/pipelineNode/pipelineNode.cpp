@@ -119,11 +119,7 @@ void PipelineNode::startWorkerThreads() {
 }
 
 void PipelineNode::stopWorkerThreads() {
-    if (pipelineRunning.exchange(false)) {
-        if (captureThread.joinable()) captureThread.join();
-        if (processingThread.joinable()) processingThread.join();
-        return;
-    }
+    pipelineRunning = false;
 
     ROS_INFO("[PipelineNode] Stopping Pipeline worker threads.");
 
@@ -135,6 +131,7 @@ void PipelineNode::stopWorkerThreads() {
 }
 
 void PipelineNode::captureLoop() {
+    ROS_INFO("[PipelineNode - Capture Thread] Thread started.");
     cv::Mat rawFrame;
     ros::Rate loopRate(params.frameRate > 0 ? params.frameRate : 30);
 
@@ -149,10 +146,10 @@ void PipelineNode::captureLoop() {
             if (!rawFrame.empty()) {
                 pipeline::FrameData data{rawFrame.clone(), captureTimestamp};
                 if (!rawFrameQueue.try_push(std::move(data))) {
-                    ROS_WARN_THROTTLE(2.0, "Capture thread: Raw frame queue full, dropping frame.");
+                    ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Raw frame queue full, dropping frame.");
                 }
             } else {
-                ROS_WARN_THROTTLE(2.0, "Capture thread: Captured empty frame.");
+                ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Captured empty frame.");
             }
         } else {
             publishError("[PipelineNode - Capture Thread] Frame capture failed.");
@@ -162,7 +159,7 @@ void PipelineNode::captureLoop() {
 }
 
 void PipelineNode::processingLoop() {
-    ROS_INFO("Processing thread started.");
+    ROS_INFO("[PipelineNode - Processing Thread] Thread started.");
     cv::Mat processedFrame;
     cv::Mat frameForMotionDetection;
     std::vector<cv::Rect> motionRects;
