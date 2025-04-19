@@ -134,6 +134,8 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
   ${CUDA_INCLUDE_DIRS}
   ${TensorRT_INCLUDE_DIRS}
+  
+  src/components/utilities/ThreadSafeQueue
 )
 
 link_directories(

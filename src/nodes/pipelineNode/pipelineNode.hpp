@@ -14,7 +14,7 @@
 #include <string>
 #include <memory>
 
-#include "components/utilities/ThreadSafeQueue/ThreadSafeQueue.hpp"
+#include "ThreadSafeQueue.hpp"
 
 namespace pipeline {
     class HarrierCaptureSrc;
@@ -23,7 +23,6 @@ namespace pipeline {
 
     struct ROSInterface {
         ros::Publisher pub_runtimeErrors;
-        image_transport::ImageTransport imageTransport;
         image_transport::Publisher pub_processedFrames;
         image_transport::Publisher pub_motionEvents;
 
@@ -67,6 +66,7 @@ class PipelineNode {
     private:
         ros::NodeHandle& nh;
         ros::NodeHandle& nh_priv;
+        image_transport::ImageTransport imageTransport;
 
         pipeline::ROSInterface rosInterface;
         pipeline::PipelineComponents components;
@@ -81,9 +81,10 @@ class PipelineNode {
         void publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishError(const std::string& errorMsg);
 
-        void loadParameters();
+        static int loadParameters(ros::NodeHandle& nh_priv, pipeline::ConfigurationParameters& parametersToLoad); // hack
         void processFrames();
         void captureLoop();
+        void processingLoop();
         void startWorkerThreads();
         void stopWorkerThreads();
 
