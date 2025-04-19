@@ -51,6 +51,59 @@ TEST_F(PipelineInternalTests, ConvertFormatDayMode) {
     ASSERT_LT(cv::norm(bgrFrame, outputBgr_2, cv::NORM_L1), 1e-5 * bgrFrame.total());
 }
 
+TEST_F(PipelineInternalTests, PreprocessFrameGray) {
+    pipeline::PipelineInternal processor(30, true); 
+
+    cv::Mat nonUniformGrayscale = cv::Mat(64, 64, CV_8UC1);
+    cv::randu(nonUniformGrayscale, cv::Scalar(50), cv::Scalar(150)); 
+
+    cv::Mat processed = processor.preprocessFrame(nonUniformGrayscale);
+    ASSERT_FALSE(processed.empty());
+    ASSERT_EQ(processed.channels(), 1);
+    ASSERT_EQ(processed.type(), CV_8UC1);
+
+    /*
+        An extremely trivial check - the mean might change but not drastically
+        A better check would be to involve comparing the histograms before and after
+    */
+    // cv::Scalar meanBefore = cv::mean(nonUniformGrayscale);
+    cv::Scalar meanAfter = cv::mean(processed);
+    ASSERT_GT(meanAfter[0], 0);
+}
+
+TEST_F(PipelineInternalTests, PreprocessFrameBGR) {
+    pipeline::PipelineInternal processor(30, false);
+
+    cv::Mat nonUniformBgr = cv::Mat(64, 64, CV_8UC3);
+    cv::randu(nonUniformBgr, cv::Scalar(0, 50, 100), cv::Scalar(100, 150, 200));
+
+    cv::Mat processed = processor.preprocessFrame(nonUniformBgr);
+    ASSERT_FALSE(processed.empty());
+    ASSERT_EQ(processed.channels(), 3);
+    ASSERT_EQ(processed.type(), CV_8UC3);
+
+    cv::Mat grayBefore, grayAfter;
+    cv::cvtColor(nonUniformBgr, grayBefore, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(processed, grayAfter, cv::COLOR_BGR2GRAY);
+   // cv::Scalar meanBefore = cv::mean(grayBefore);
+    cv::Scalar meanAfter = cv::mean(grayAfter);
+    ASSERT_GT(meanAfter[0], 0);
+}
+
+TEST_F(PipelineInternalTests, ProcessFrameIntegration) {
+    pipeline::PipelineInternal processor(30, false); 
+
+    /* Process a gray frame - it should be converted to BGR and preprocessed */
+    cv::Mat result = processor.processFrame(grayFrame);
+    ASSERT_FALSE(result.empty());
+    ASSERT_EQ(result.channels(), 3); 
+    ASSERT_EQ(result.type(), CV_8UC3);
+
+    cv::Mat emptyFrameAfterProcesing = processor.processFrame(cv::Mat());
+    ASSERT_TRUE(emptyFrameAfterProcesing.empty());
+}
+
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

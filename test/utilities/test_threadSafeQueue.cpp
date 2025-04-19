@@ -181,7 +181,7 @@ TEST_F(ThreadSafeQueueTests, SingleProducerSingleConsumer) {
 }
 
 TEST_F(ThreadSafeQueueTests, MultipleProducersMultipleConsumers) {
-    ThreadSafeQueue<int> q(50);
+    ThreadSafeQueue<int> q(100);
     const int producerCount = 4;
     const int consumerCount = 3;
     const int items_per_producer = 500;
@@ -196,9 +196,9 @@ TEST_F(ThreadSafeQueueTests, MultipleProducersMultipleConsumers) {
     producers.reserve(producerCount);
 
     for (int i = 0; i < producerCount; ++i) {
-        producers.emplace_back([&, producer_id = i]() {
+        producers.emplace_back([&, producerIdentifier = i]() {
             for (int j = 0; j < items_per_producer; ++j) {
-                int value = producer_id * items_per_producer + j;
+                int value = producerIdentifier * items_per_producer + j;
                 ASSERT_TRUE(q.push(value));
                 producedItems++;
             }
@@ -206,25 +206,13 @@ TEST_F(ThreadSafeQueueTests, MultipleProducersMultipleConsumers) {
     }
 
     for (int i = 0; i < consumerCount; ++i) {
-        consumers.emplace_back([&]() {
-            while (consumedItems < total_items) {
+        consumers.emplace_back([&](){
+            while(true) {
                 std::optional<int> val = q.pop();
-                if (val.has_value()) {
-                    consumedItems++;
+                if(val.has_value()) {
+                    ++consumedItems;
                 } else {
-                    /*
-                        Pop might return nullopt if the queue is stopped prematurely or if all items
-                       are consumed but consumers are still looping.
-
-                        This checks whether all items are potentially consumed before breaking
-                    */
-                    if (producedItems >= total_items && q.isQueueEmpty()) {
-                        /*
-                           It's likely all items produced and queue is empty
-                        */
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    break;
                 }
             }
         });
@@ -233,6 +221,9 @@ TEST_F(ThreadSafeQueueTests, MultipleProducersMultipleConsumers) {
     for (auto& t : producers) {
         t.join();
     }
+    /* Sanity check */
+    ASSERT_EQ(producedItems.load(), total_items);
+    q.stopWaitingThreads();
 
     /*
         All consumer threads have to finish and eventually exit the loop, i.e. all the threads have
@@ -241,8 +232,6 @@ TEST_F(ThreadSafeQueueTests, MultipleProducersMultipleConsumers) {
     for (auto& t : consumers) {
         t.join();
     }
-
-    ASSERT_EQ(producedItems.load(), total_items);
     ASSERT_EQ(consumedItems.load(), total_items);
     ASSERT_TRUE(q.isQueueEmpty());
 }
