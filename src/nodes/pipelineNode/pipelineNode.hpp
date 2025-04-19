@@ -39,6 +39,9 @@ namespace pipeline {
         int frameRate;
         int motionSamplingRate;
         int bufferSize;
+        int motionMinAreaPx;
+        float motionDownScale;
+        int motionHistory;
 
         bool nightMode;
         bool showDebugFrames;
