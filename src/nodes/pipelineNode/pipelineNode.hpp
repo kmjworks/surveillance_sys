@@ -3,14 +3,18 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <std_msgs/String.h>
+
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
+
 #include <mutex>
 #include <atomic>
 #include <thread>
 #include <string>
 #include <memory>
 
+#include "ThreadSafeQueue.hpp"
 
 namespace pipeline {
     class HarrierCaptureSrc;
@@ -18,9 +22,10 @@ namespace pipeline {
     class PipelineInitialDetectionLite;
 
     struct ROSInterface {
-        ros::Publisher pub_motionEvents;
-        ros::Publisher pub_processedFrames;
         ros::Publisher pub_runtimeErrors;
+        image_transport::Publisher pub_processedFrames;
+        image_transport::Publisher pub_motionEvents;
+
     };
 
     struct PipelineComponents {
@@ -33,12 +38,20 @@ namespace pipeline {
         int frameRate;
         int motionSamplingRate;
         int bufferSize;
+        int motionMinAreaPx;
+        float motionDownScale;
+        int motionHistory;
 
         bool nightMode;
         bool showDebugFrames;
         
         std::string devicePath;
         std::string outputPath;
+    };
+
+    struct FrameData {
+        cv::Mat frame;
+        ros::Time timestamp;
     };
 }
 
@@ -48,26 +61,34 @@ class PipelineNode {
         ~PipelineNode();
 
         bool initializePipelineNode();
+        /*
+            loadParameters made public for unit testing
+        */
+        static int loadParameters(ros::NodeHandle& nh_priv, pipeline::ConfigurationParameters& parametersToLoad); // hack
         void shutdown();
 
     private:
         ros::NodeHandle& nh;
         ros::NodeHandle& nh_priv;
+        image_transport::ImageTransport imageTransport;
 
         pipeline::ROSInterface rosInterface;
         pipeline::PipelineComponents components;
         pipeline::ConfigurationParameters params;
+        ThreadSafeQueue<pipeline::FrameData> rawFrameQueue;
 
+        std::thread captureThread;
+        std::thread processingThread;
         std::atomic<bool> pipelineRunning;
-        std::mutex frameMtx;
-        std::thread pipelineProcessingThread;
 
-        void loadParameters();
-        void processFrames();
-        void publishFrame(const cv::Mat& frame, const ros::Time& timestamp);
+        void publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp);
+        void publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishError(const std::string& errorMsg);
-        void startProcessingThread();
-        void stopProcessingThread();
+        void processFrames();
+        void captureLoop();
+        void processingLoop();
+        void startWorkerThreads();
+        void stopWorkerThreads();
 
 
 };

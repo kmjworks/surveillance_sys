@@ -93,17 +93,62 @@ void MotionDetectionNode::imageCb(const sensor_msgs::ImageConstPtr& msg) {
     if (!arr.detections.empty())
         pub_detectedMotion.publish(arr);
 
-    if (enableViz && pub_vizDebug.getNumSubscribers() > 0) {
+    if (enableViz && pub_vizDebug.getNumSubscribers() > 0 && !arr.detections.empty()) {
+
+        /*
+           Draw on a *copy* of the input image to avoid modifying the shared pointer's data,
+           cvPtr->image is a const, so clone is necessary anyway.        
+        */
         cv::Mat viz = cvPtr->image.clone();
-        for (const auto& d : arr.detections) {
-            float x = d.bbox.center.x, y = d.bbox.center.y;
-            float w = d.bbox.size_x, h = d.bbox.size_y;
-            cv::rectangle(viz, {int(x - w / 2), int(y - h / 2)}, {int(x + w / 2), int(y + h / 2)},
-                          cv::Scalar(0, 255, 0), 2);
+        if (viz.channels() == 1) {
+            cv::cvtColor(viz, viz, cv::COLOR_GRAY2BGR);
         }
+
+        for (const auto& d : arr.detections) {
+            float x_center = d.bbox.center.x;
+            float y_center = d.bbox.center.y;
+            float w = d.bbox.size_x;
+            float h = d.bbox.size_y;
+            int x1 = static_cast<int>(x_center - w / 2.0f);
+            int y1 = static_cast<int>(y_center - h / 2.0f);
+            int x2 = static_cast<int>(x_center + w / 2.0f);
+            int y2 = static_cast<int>(y_center + h / 2.0f);
+
+            x1 = std::max(0, std::min(x1, viz.cols - 1));
+            y1 = std::max(0, std::min(y1, viz.rows - 1));
+            x2 = std::max(0, std::min(x2, viz.cols - 1));
+            y2 = std::max(0, std::min(y2, viz.rows - 1));
+
+            cv::rectangle(viz, {x1, y1}, {x2, y2}, cv::Scalar(0, 255, 0), 2);
+
+            std::string label = "Human";
+            float confidence = 0.0f;
+            if (!d.results.empty()) {
+                confidence = d.results[0].score;
+            }
+            label += ": " + cv::format("%.2f", confidence); 
+
+            int baseline = 0;
+            cv::Size labelSize =
+                cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
+            int label_y = std::max(
+                y1, labelSize.height + 5); 
+            cv::Point label_origin = cv::Point(x1, label_y - 5);  
+
+
+            cv::rectangle(
+                viz, cv::Point(label_origin.x, label_origin.y + baseline),
+                cv::Point(label_origin.x + labelSize.width, label_origin.y - labelSize.height),
+                cv::Scalar(0, 100, 0),  
+                cv::FILLED);
+
+            cv::putText(viz, label, label_origin, cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                        cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+        }
+
         vizImg.image = viz;
-        vizImg.encoding = msg->encoding;
-        vizImg.header = msg->header;
+        vizImg.encoding = sensor_msgs::image_encodings::BGR8;
+        vizImg.header = msg->header; 
         pub_vizDebug.publish(vizImg.toImageMsg());
     }
 }

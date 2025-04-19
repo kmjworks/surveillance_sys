@@ -134,6 +134,7 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
   ${CUDA_INCLUDE_DIRS}
   ${TensorRT_INCLUDE_DIRS}
+  src/components/utilities/ThreadSafeQueue
 )
 
 link_directories(
@@ -232,26 +233,47 @@ install(DIRECTORY launch/
 ## )
 
 if(CATKIN_ENABLE_TESTING)
-  catkin_add_gtest(pipeline_test
-    test/test_pipeline.cpp
-    src/nodes/pipelineNode/components/pipelineInternal.cpp
-    src/nodes/pipelineNode/components/pipelineInitialDetection.cpp
+  find_package(GTest REQUIRED)
+  find_package(rostest REQUIRED)
+
+  ## Utility tests
+  catkin_add_gtest(thread_safe_queue_test
+    test/utilities/test_threadSafeQueue.cpp
   )
-  target_link_libraries(pipeline_test
+  target_link_libraries(thread_safe_queue_test
+    ${catkin_LIBRRIES}
+    Threads::Threads
+    ${GTEST_LIBRARIES}
+  )
+
+  ## Pipeline tests
+  catkin_add_gtest(pipeline_internal_test
+    test/pipeline/test_pipelineInternal.cpp
+    src/nodes/pipelineNode/components/pipelineInternal.cpp 
+  )
+  target_link_libraries(pipeline_internal_test
     ${catkin_LIBRARIES}
-    ${OpenCV_LIBRARIES}
+    ${OpenCV_LIBRARIES} 
+    Threads::Threads
+    ${GTEST_LIBRARIES}
   )
+
+  catkin_add_gtest(pipeline_parameter_test
+    test/pipeline/test_pipelineParameterLoading.cpp
+    src/nodes/pipelineNode/pipelineNode.cpp 
+    src/nodes/pipelineNode/components/pipelineInternal.cpp 
+    src/nodes/pipelineNode/components/pipelineInitialDetection.cpp
+    src/nodes/pipelineNode/components/pipelineInitialDetectionLite.cpp
+    src/nodes/pipelineNode/components/harrierCaptureSrc.cpp
+  )
+
+  target_link_libraries(pipeline_parameter_test
+    ${COMMON_DEPS}
+    ${GSTREAMER_DEPS}
+    Threads::Threads
+    ${GTEST_LIBRARIES}
+  )
+
+
 endif()
 
-# ############
-# # Testing ##
-# ############
-
-# # Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_surveillance_system.cpp)
-# if(TARGET ${PROJECT_NAME}-test)
-# target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
-# endif()
-
-# # Add folders to be run by python nosetests
-# catkin_add_nosetests(test)
