@@ -20,6 +20,12 @@ MotionDetectionNode::MotionDetectionNode(ros::NodeHandle& nh, ros::NodeHandle& p
     pnh.param("input_w", runtimeConfiguration.inputWidth, 640);
     pnh.param("input_h", runtimeConfiguration.inputHeight, 640);
 
+    initEngine();
+
+    rosInterface.sub_imageSrc = imageTransport.subscribe("pipeline/runtime_potentialMotionEvents", 1, &MotionDetectionNode::imageCb, this, image_transport::TransportHints("raw"));
+    rosInterface.pub_detectedMotion = nh.advertise<vision_msgs::Detection2DArray>("yolo/runtime_detections", 10);
+    if(runtimeDebugConfiguration.enableViz) rosInterface.pub_vizDebug = nh.advertise<sensor_msgs::Image>("yolo/runtime_detectionVisualizationDebug", 1);
+
     ROS_INFO("[MotionDetectionNode- TensorRT] ready - engine: %s", runtimeConfiguration.enginePath.c_str());
 }
 
@@ -172,15 +178,16 @@ std::vector<vision_msgs::Detection2D> MotionDetectionNode::postProcess(const flo
     return dets;
 }
 
-void MotionDetectionNode::publishForVisualization(std::vector<vision_msgs::Detection2D> detectionPoints, cv::Mat viz, const sensor_msgs::ImageConstPtr& msg) {
+void MotionDetectionNode::publishForVisualization(std::vector<vision_msgs::Detection2D> &detectionPoints, cv::Mat viz, const sensor_msgs::ImageConstPtr& msg) {
     for(const auto& d : detectionPoints) {
-        float x = d.bbox.center.x, y = d.bbox.center.y;
-        float w = d.bbox.size_x,   h = d.bbox.size_y;
-
-        cv::rectangle(viz, 
-            cv::Point(int(x-w/2), int(y-h/2)),
-            cv::Point(int(x+w/2), int(y+h/2)),
-            cv::Scalar(0,255,0), 2    
+        float x = d.bbox.center.x;
+        float y = d.bbox.center.y;
+        float w = d.bbox.size_x;
+        float h = d.bbox.size_y;
+        cv::rectangle(viz,
+            cv::Point(int(x - w / 2), int(y - h / 2)),
+            cv::Point(int(x + w / 2), int(y + h / 2)),
+            cv::Scalar(0, 255, 0), 2
         );
     }
 
