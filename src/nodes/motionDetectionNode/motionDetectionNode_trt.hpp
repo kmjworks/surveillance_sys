@@ -26,30 +26,35 @@ namespace motion_detection {
     
     struct RuntimeConfiguration {
         std::string enginePath;
-        float confidenceThreshold{0.6F};
-        int inputWidth{640};
-        int inputHeight{640};
-        void* gpuBuffers[2]{};
-        size_t outputSize{0}; 
+        int inputWidth = 640;
+        int inputHeight = 640;
+        float confidenceThreshold = 0.6f;
+        float nmsThreshold = 0.5f;
+        void* gpuBuffers[2] = {nullptr, nullptr};
+        size_t outputSize = 0;
     };
     
     struct TensorRTInterface {
-        std::unique_ptr<nvinfer1::IRuntime, void(*)(nvinfer1::IRuntime*)> runtime{nullptr, [](nvinfer1::IRuntime* p){ if (p) p->destroy(); }};
-        std::unique_ptr<nvinfer1::ICudaEngine, void(*)(nvinfer1::ICudaEngine*)> engine{nullptr, [](nvinfer1::ICudaEngine* p){ if (p) p->destroy(); }};
-        std::unique_ptr<nvinfer1::IExecutionContext, void(*)(nvinfer1::IExecutionContext*)> ctx{nullptr, [](nvinfer1::IExecutionContext* p){ if (p) p->destroy(); }};
-
-        cudaStream_t stream{};
+        std::unique_ptr<nvinfer1::IRuntime> runtime{nullptr};
+        std::unique_ptr<nvinfer1::ICudaEngine> engine{nullptr};
+        std::unique_ptr<nvinfer1::IExecutionContext> ctx{nullptr};
+        cudaStream_t stream = nullptr;
     };
     
     struct DebugConfiguration {
         bool enableViz{true};
         cv_bridge::CvImage vizImg;
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
     };    
 }
 
 class MotionDetectionNode {
 public:
     MotionDetectionNode(ros::NodeHandle& nh, ros::NodeHandle& pnh);
+    MotionDetectionNode(const MotionDetectionNode&) = delete;
+    MotionDetectionNode& operator=(const MotionDetectionNode&) = delete;
+
     ~MotionDetectionNode();
 
 private:
@@ -65,5 +70,5 @@ private:
     void publishForVisualization(std::vector<vision_msgs::Detection2D> &detectionPoints,cv::Mat viz, const sensor_msgs::ImageConstPtr& msg);
     void imageCb(const sensor_msgs::ImageConstPtr& msg);
     cv::Mat preProcess(const cv::Mat& img);
-    std::vector<vision_msgs::Detection2D> postProcess(const float* out);
+    std::vector<vision_msgs::Detection2D> postProcess(const float* outputData, const ros::Time& timestamp, const std::string& frame_id);
 };

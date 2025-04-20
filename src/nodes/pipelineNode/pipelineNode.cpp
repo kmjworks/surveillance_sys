@@ -194,7 +194,7 @@ void PipelineNode::processingLoop() {
                 for(const auto& rect : motionRects) {
                     cv::rectangle(motionVizFrame, rect, cv::Scalar(0, 255, 0), 1);   
                 }
-                publishMotionEventFrame(motionVizFrame, data.timestamp);
+                publishMotionEventFrame(data.frame, data.timestamp);
             } else {
                 publishMotionEventFrame(processedFrame, data.timestamp);
             }
