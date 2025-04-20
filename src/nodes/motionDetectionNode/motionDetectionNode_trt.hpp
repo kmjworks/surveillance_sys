@@ -62,6 +62,7 @@ private:
     motion_detection::DebugConfiguration runtimeDebugConfiguration;
 
     void initEngine();
+    void publishForVisualization(std::vector<vision_msgs::Detection2D> detectionPoints,cv::Mat viz, const sensor_msgs::ImageConstPtr& msg);
     void imageCb(const sensor_msgs::ImageConstPtr& msg);
     cv::Mat preProcess(const cv::Mat& img);
     std::vector<vision_msgs::Detection2D> postProcess(const float* out);
