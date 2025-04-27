@@ -1,5 +1,6 @@
 #include "HarrierCommsUSB.h"
 #include <boost/optional/optional.hpp>
+#include <mutex>
 
 
 namespace internal {
@@ -45,6 +46,7 @@ class Harrier {
         void throwOnInternalCommsError(internal::CommunicationState commandStatus, internal::CommandType cmdType);
 
         internal::CommunicationInterface commsInternal;
+        std::mutex commsMtx;
 };
 
 class USBDevice {

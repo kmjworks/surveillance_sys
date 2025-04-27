@@ -32,6 +32,7 @@ namespace motion_detection {
         float nmsThreshold = 0.5f;
         void* gpuBuffers[2] = {nullptr, nullptr};
         size_t outputSize = 0;
+        int numClasses = 3;
     };
     
     struct TensorRTInterface {

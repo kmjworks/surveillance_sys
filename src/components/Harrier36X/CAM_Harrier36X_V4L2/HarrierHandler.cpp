@@ -2,6 +2,10 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <chrono>
+#include <thread>
+
+using namespace std::chrono; 
 
 Harrier::Harrier(HarrierUSBHandle handle) : commsInternal {handle, HarrierCommsOK, std::vector<uint8_t>(128)}  {
    unsigned char bytesTmp = 0;
@@ -62,6 +66,15 @@ internal::ViscaPacket Harrier::createViscaInquiryPacket(const uint8_t* command) 
 void Harrier::sendCommand(const internal::ViscaPacket& cmdPacket) {
     internal::CommunicationState status = HarrierCommsUSBTransmit(commsInternal.device,cmdPacket.packet, cmdPacket.packetSize);
     throwOnInternalCommsError(status, internal::CommandType::CONTROL);
+
+    unsigned char cmdReplyBytes = 6;
+    {
+        std::lock_guard<std::mutex> lock(commsMtx);
+        status = HarrierCommsUSBReceive(commsInternal.device, commsInternal.onReplyBuffer.data(), commsInternal.onReplyBuffer.size(), &cmdReplyBytes, 200);
+        throwOnInternalCommsError(status, internal::CommandType::CONTROL);
+    }
+    
+    std::this_thread::sleep_for(milliseconds(100));
 }
 
 void Harrier::sendInquiry(const internal::ViscaPacket& inqPacket) {

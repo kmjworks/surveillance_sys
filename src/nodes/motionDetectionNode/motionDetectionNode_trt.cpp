@@ -164,182 +164,200 @@ cv::Mat MotionDetectionNode::preProcess(const cv::Mat& img) {
     cv::Mat float_image;
     resized_image.convertTo(float_image, CV_32F, 1.0 / 255.0);
 
-    cv::Mat blob = cv::dnn::blobFromImage(float_image, 1.0, cv::Size(), cv::Scalar(), false, false);
+    cv::Mat blob = cv::dnn::blobFromImage(float_image, 1.0, cv::Size(), cv::Scalar(), true, false);
     return blob;
 }
 
 std::vector<vision_msgs::Detection2D> MotionDetectionNode::postProcess(
-    const float* outputData, const ros::Time& timestamp, const std::string& frame_id) {
+    const float* outputData, 
+    const ros::Time& timestamp, 
+    const std::string& frame_id
+) {
     std::vector<vision_msgs::Detection2D> finalDetections;
-    nvinfer1::Dims outDims = engineInterface.engine->getBindingDimensions(
-        engineInterface.engine->getBindingIndex("output0"));
+    const int outIdx = engineInterface.engine->getBindingIndex("output0");
+    nvinfer1::Dims outDims = engineInterface.engine->getBindingDimensions(outIdx);
 
     if (outDims.nbDims != 3 || outDims.d[0] != 1) {
-        ROS_ERROR(
-            "[MotionDetectionNode::postProcess] Unexpected output dimensions. Expected [1, "
-            "num_boxes, 5+num_classes], got %d dims.",
-            outDims.nbDims);
+        ROS_ERROR("[postProcess] Unexpected output dims. Expected [1,7,8400], got [%d,%d,%d].",
+                  outDims.d[0], outDims.d[1], outDims.d[2]);
+        return finalDetections;
+    }
+    const int numElementsPerBox = outDims.d[1];  // 7
+    const int numBoxes          = outDims.d[2];  // 8400
+
+    if (numElementsPerBox != (4 + runtimeConfiguration.numClasses)) {
+        ROS_ERROR("[postProcess] Mismatch: Model's second dimension = %d, but we expect %d = (4 + %d classes).",
+                  numElementsPerBox, 4 + runtimeConfiguration.numClasses, runtimeConfiguration.numClasses);
         return finalDetections;
     }
 
-    const int numBoxes = outDims.d[1];
-    const int numElementsPerBox = outDims.d[2];
-    const int numClasses = numElementsPerBox - 5;
-
-    if (numElementsPerBox < 5) {
-        ROS_ERROR(
-            "[MotionDetectionNode::postProcess] Unexpected number of elements per box: %d. "
-            "Expected >= 5.",
-            numElementsPerBox);
-        return finalDetections;
-    }
-
-    std::vector<cv::Rect> boxes;
-    std::vector<float> scores;
-    std::vector<int> classIDs;
-
-    boxes.reserve(numBoxes);
+    std::vector<cv::Rect> boxesNet;
+    std::vector<float>    scores;
+    std::vector<int>      classIDs;
+    boxesNet.reserve(numBoxes);
     scores.reserve(numBoxes);
     classIDs.reserve(numBoxes);
 
+    const float* cxPtr = outputData + 0 * numBoxes;
+    const float* cyPtr = outputData + 1 * numBoxes;
+    const float* wPtr  = outputData + 2 * numBoxes;
+    const float* hPtr  = outputData + 3 * numBoxes;
+
+    const float* classPtr = outputData + 4 * numBoxes;
+    const int numClasses   = runtimeConfiguration.numClasses;
+
+    const float confThresh   = runtimeConfiguration.confidenceThreshold;
+    const float netInputWf   = static_cast<float>(runtimeConfiguration.inputWidth);
+    const float netInputHf   = static_cast<float>(runtimeConfiguration.inputHeight);
+
     for (int i = 0; i < numBoxes; ++i) {
-        const float* boxData = outputData + i * numElementsPerBox;
+        float maxClsScore = -1.0f;
+        int   bestClsIdx  = -1;
+        for (int c = 0; c < numClasses; ++c) {
+            float clsScore = (classPtr + c * numBoxes)[i];
+            if (clsScore > maxClsScore) {
+                maxClsScore = clsScore;
+                bestClsIdx  = c;
+            }
+        }
 
-        float cx = boxData[0];
-        float cy = boxData[1];
-        float w = boxData[2];
-        float h = boxData[3];
-        float conf = boxData[4];
-
-        if (conf < runtimeConfiguration.confidenceThreshold) {
+        if (maxClsScore < confThresh) {
             continue;
         }
 
-        int bestClassIdx = 0;
-        float bestScore = conf;
+        float cx = cxPtr[i];
+        float cy = cyPtr[i];
+        float w  = wPtr[i];
+        float h  = hPtr[i];
 
-        if (numClasses >= 1) {
-            float maxClsProbability = 0.0f;
-            int maxClsIdx = 0;
+        float x_net = (cx - w * 0.5f);
+        float y_net = (cy - h * 0.5f);
+        float w_net = w;
+        float h_net = h;
 
-            for (int j = 0; j < numClasses; ++j) {
-                float classProbability = boxData[5 + j];
-                if (classProbability > maxClsProbability) {
-                    maxClsProbability = classProbability;
-                    maxClsIdx = j;
-                }
-            }
-            float finalConfidenceScore = conf * maxClsProbability;
-            if (finalConfidenceScore < runtimeConfiguration.confidenceThreshold) {
-                continue;
-            }
-            bestScore = finalConfidenceScore;
-            bestClassIdx = maxClsIdx;
-        }
+        x_net = std::max(0.0f, std::min(x_net, netInputWf - 1.0f));
+        y_net = std::max(0.0f, std::min(y_net, netInputHf - 1.0f));
+        w_net = std::max(1.0f, std::min(w_net, netInputWf - x_net));
+        h_net = std::max(1.0f, std::min(h_net, netInputHf - y_net));
 
-        float cx_pix = cx * runtimeConfiguration.inputWidth;
-        float cy_pix = cy * runtimeConfiguration.inputHeight;
-        float w_pix = w * runtimeConfiguration.inputWidth;
-        float h_pix = h* runtimeConfiguration.inputHeight;
-
-        float x = cx_pix - w_pix / 2.0f;
-        float y = cy_pix - h_pix / 2.0f;
-
-        boxes.emplace_back(static_cast<int>(x), static_cast<int>(y), static_cast<int>(w_pix),
-                           static_cast<int>(h_pix));
-        scores.push_back(bestScore);
-        classIDs.push_back(bestClassIdx);
+        boxesNet.emplace_back(
+            static_cast<int>(x_net),
+            static_cast<int>(y_net),
+            static_cast<int>(w_net),
+            static_cast<int>(h_net)
+        );
+        scores.push_back(maxClsScore);
+        classIDs.push_back(bestClsIdx);
     }
 
-    if (boxes.empty()) {
+    if (boxesNet.empty()) {
         return finalDetections;
     }
 
-    std::vector<int> keep;
-    cv::dnn::NMSBoxes(boxes, scores, runtimeConfiguration.confidenceThreshold,
-                      runtimeConfiguration.nmsThreshold, keep);
+    float nmsThreshold = 0.5f;  
+    std::vector<int> keepIndices;
+    cv::dnn::NMSBoxes(boxesNet, scores, confThresh, nmsThreshold, keepIndices);
 
-    finalDetections.reserve(keep.size());
-    for (int idx : keep) {
-        vision_msgs::Detection2D det;
-        det.header.stamp = timestamp;
-        det.header.frame_id = frame_id;
+    finalDetections.reserve(keepIndices.size());
+    for (int idx : keepIndices) {
+        vision_msgs::Detection2D detection;
+        detection.header.stamp    = timestamp;
+        detection.header.frame_id = frame_id;
 
-        float x = static_cast<float>(boxes[idx].x);
-        float y = static_cast<float>(boxes[idx].y);
-        float w = static_cast<float>(boxes[idx].width);
-        float h = static_cast<float>(boxes[idx].height);
-
-        det.bbox.center.x = x + w / 2.0f;
-        det.bbox.center.y = y + h / 2.0f;
-        det.bbox.size_x = w;
-        det.bbox.size_y = h;
+        const cv::Rect& box = boxesNet[idx];
+        detection.bbox.center.x = box.x + box.width  * 0.5;
+        detection.bbox.center.y = box.y + box.height * 0.5;
+        detection.bbox.size_x   = box.width;
+        detection.bbox.size_y   = box.height;
 
         vision_msgs::ObjectHypothesisWithPose hyp;
-        hyp.id = classIDs[idx];
+        hyp.id    = classIDs[idx];
         hyp.score = scores[idx];
-        det.results.push_back(hyp);
+        detection.results.push_back(hyp);
 
-        finalDetections.push_back(det);
+        finalDetections.push_back(detection);
     }
+
     return finalDetections;
 }
 
 void MotionDetectionNode::publishForVisualization(
-    std::vector<vision_msgs::Detection2D>& detectionPoints, cv::Mat viz,
+    std::vector<vision_msgs::Detection2D> &detectionPoints, cv::Mat viz,
     const sensor_msgs::ImageConstPtr& msg) {
     if (viz.empty()) {
-        ROS_WARN("[MotionDetectionNode::publishForVisualization] Cannot visualize on empty frame.");
+        ROS_WARN("[publishForVisualization] Empty frame, skipping.");
         return;
     }
 
-    for (const auto& d : detectionPoints) {
-        float box_cx = d.bbox.center.x;
-        float box_cy = d.bbox.center.y;
-        float box_w = d.bbox.size_x;
-        float box_h = d.bbox.size_y;
+    const std::vector<std::string> classNames = {"person", "dog", "cat"};
 
-        int xmin = static_cast<int>((box_cx - box_w / 2.0f) * runtimeDebugConfiguration.scaleX);
-        int ymin = static_cast<int>((box_cy - box_h / 2.0f) * runtimeDebugConfiguration.scaleY);
-        int xmax = static_cast<int>((box_cx + box_w / 2.0f) * runtimeDebugConfiguration.scaleX);
-        int ymax = static_cast<int>((box_cy + box_h / 2.0f) * runtimeDebugConfiguration.scaleY);
+    for (const auto& d : detectionPoints) {
+
+        double boxCx = d.bbox.center.x;
+        double boxCy = d.bbox.center.y;
+        double boxWidth = d.bbox.size_x;
+        double boxHeight = d.bbox.size_y;
+
+        int xmin = static_cast<int>((boxCx - boxWidth / 2.0) * runtimeDebugConfiguration.scaleX);
+        int ymin = static_cast<int>((boxCy - boxHeight / 2.0) * runtimeDebugConfiguration.scaleY);
+        int xmax = static_cast<int>((boxCx + boxWidth / 2.0) * runtimeDebugConfiguration.scaleX);
+        int ymax = static_cast<int>((boxCy + boxHeight / 2.0) * runtimeDebugConfiguration.scaleY);
 
         xmin = std::max(0, std::min(xmin, viz.cols - 1));
         ymin = std::max(0, std::min(ymin, viz.rows - 1));
         xmax = std::max(0, std::min(xmax, viz.cols - 1));
         ymax = std::max(0, std::min(ymax, viz.rows - 1));
+        if (xmax <= xmin || ymax <= ymin) {
+            continue;
+        }
 
         cv::rectangle(viz, cv::Point(xmin, ymin), cv::Point(xmax, ymax), cv::Scalar(0, 255, 0), 2);
+
         if (!d.results.empty()) {
-            float score = d.results[0].score;
-            std::ostringstream labelStream;
-            labelStream << "Human: " << std::fixed << std::setprecision(2) << score;
-            std::string label = labelStream.str();
+            const auto& hyp = d.results[0];
+            int classID = hyp.id;
+            float score = hyp.score;
+            std::string label = "unknown";
+
+            if (classID >= 0 && classID < static_cast<int>(classNames.size())) {
+                label = classNames[classID];
+            }
+
+            std::ostringstream ss;
+            ss << label << ": " << std::fixed << std::setprecision(2) << score;
+            std::string labelStr = ss.str();
 
             int baseline = 0;
             cv::Size labelSize =
-                cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.6, 1, &baseline);
+                cv::getTextSize(labelStr, cv::FONT_HERSHEY_SIMPLEX, 0.6, 1, &baseline);
             baseline += 1;
 
-            int top = std::max(ymin - labelSize.height - baseline, 0);
-            int left = std::max(xmin, 0);
-            int right = std::min(left + labelSize.width, viz.cols);
-            int bottom = std::min(top + labelSize.height + baseline, viz.rows);
+            int textBgTop = std::max(ymin - labelSize.height - baseline - 5, 0);
+            int textBgLeft = xmin;
+            int textBgRight = textBgLeft + labelSize.width;
+            int textBgBottom = textBgTop + labelSize.height + baseline;
 
-            cv::rectangle(viz, cv::Point(left, top), cv::Point(right, bottom),
-                          cv::Scalar(0, 255, 0), cv::FILLED);
+            cv::rectangle(
+                viz, cv::Point(textBgLeft, textBgTop),
+                cv::Point(std::min(textBgRight, viz.cols), std::min(textBgBottom, viz.rows)),
+                cv::Scalar(0, 255, 0), cv::FILLED);
 
-            cv::putText(viz, label, cv::Point(left, bottom - baseline), cv::FONT_HERSHEY_SIMPLEX,
-                        0.6, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
+            int textOrgX = textBgLeft;
+            int textOrgY = textBgBottom - baseline / 2;
+            textOrgY = std::max(labelSize.height, textOrgY);
+
+            cv::putText(viz, labelStr, cv::Point(textOrgX, textOrgY), cv::FONT_HERSHEY_SIMPLEX, 0.6,
+                        cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
         }
     }
+
     try {
-        runtimeDebugConfiguration.vizImg.image = viz;
-        runtimeDebugConfiguration.vizImg.encoding = msg->encoding;
-        runtimeDebugConfiguration.vizImg.header = msg->header;
-        rosInterface.pub_vizDebug.publish(runtimeDebugConfiguration.vizImg.toImageMsg());
+        cv_bridge::CvImage outputCvImage;
+        outputCvImage.encoding = sensor_msgs::image_encodings::BGR8;
+        outputCvImage.header = msg->header;
+        outputCvImage.image = viz;
+        rosInterface.pub_vizDebug.publish(outputCvImage.toImageMsg());
     } catch (const cv_bridge::Exception& e) {
-        ROS_ERROR("[MotionDetectionNode::publishForVisualization] cv_bridge exception: %s",
-                  e.what());
+        ROS_WARN("[publishForVisualization] cv_bridge publishing error: %s", e.what());
     }
 }

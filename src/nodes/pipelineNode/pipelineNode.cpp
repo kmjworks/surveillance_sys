@@ -181,25 +181,16 @@ void PipelineNode::processingLoop() {
             continue;
         }
 
-        publishRawFrame(data.frame, data.timestamp); // Debug
-
-        processedFrame = components.pipelineInternal->processFrame(data.frame);
-        if(processedFrame.empty()) ROS_WARN("[PipelineNode - Processing Thread] Frame processing resulted in empty frame.");
+        // publishRawFrame(data.frame, data.timestamp); // Debug
+        publishMotionEventFrame(data.frame, data.timestamp);
+        //processedFrame = components.pipelineInternal->processFrame(data.frame);
+        //if(processedFrame.empty()) ROS_WARN("[PipelineNode - Processing Thread] Frame processing resulted in empty frame.");
         
-        motionPresence = components.pipelineIntegratedMotionDetection->detect(processedFrame, motionRects);
+        // motionPresence = components.pipelineIntegratedMotionDetection->detect(processedFrame, motionRects);
         
-        if(motionPresence) {
-            if(!motionRects.empty()) {
-                cv::Mat motionVizFrame = processedFrame.clone();
-                for(const auto& rect : motionRects) {
-                    cv::rectangle(motionVizFrame, rect, cv::Scalar(0, 255, 0), 1);   
-                }
-                publishMotionEventFrame(data.frame, data.timestamp);
-            } else {
-                publishMotionEventFrame(processedFrame, data.timestamp);
-            }
-        }
-
+        // if(motionPresence) {
+           // publishMotionEventFrame(data.frame, data.timestamp);
+        //}
     }
 }
 
