@@ -14,7 +14,7 @@ FIND_PACKAGE(Boost COMPONENTS program_options REQUIRED)
 message(STATUS "Boost version: ${Boost_VERSION}")
 
 # Find required packages for camera test
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 4.10.0 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 
@@ -22,19 +22,20 @@ include_directories(
     ${Boost_INCLUDE_DIR} 
     "../components/Harrier36X/VISCA" 
     "../components/Harrier36X/CAM_Harrier36X"
+    "../components/Harrier36X/CAM_Harrier36X_V4L2"
     ${OpenCV_INCLUDE_DIRS}
     ${GSTREAMER_INCLUDE_DIRS}
     ${FMT_LIBS}
 )
 
 find_library(HARRIER_LIB HarrierCommsUSB
-    PATHS ./Harrier36X/harrierv4l2Bringup/driver
+    PATHS ../components/Harrier36X/CAM_Harrier36X_V4L2/driver
     REQUIRED
 )   
 
 set(SOURCES_V4L2
-    "Harrier36X/harrierV4L2/harrierBringup/HarrierHandler.cpp"
-    "Harrier36X/harrierV4L2/harrierBringup/V4L2Device.cpp"
+    "../components/Harrier36X/CAM_Harrier36X_V4L2/HarrierHandler.cpp"
+    "../components/Harrier36X/CAM_Harrier36X_V4L2/V4L2Device.cpp"
 )
 
 
