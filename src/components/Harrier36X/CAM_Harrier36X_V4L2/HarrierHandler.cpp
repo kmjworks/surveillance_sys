@@ -67,7 +67,8 @@ void Harrier::sendCommand(const internal::ViscaPacket& cmdPacket) {
     internal::CommunicationState status = HarrierCommsUSBTransmit(commsInternal.device,cmdPacket.packet, cmdPacket.packetSize);
     throwOnInternalCommsError(status, internal::CommandType::CONTROL);
 
-    unsigned char cmdReplyBytes = 6;
+    unsigned char cmdReplyBytes = 0;
+    commsInternal.onReplyBuffer.resize(128);
     {
         std::lock_guard<std::mutex> lock(commsMtx);
         status = HarrierCommsUSBReceive(commsInternal.device, commsInternal.onReplyBuffer.data(), commsInternal.onReplyBuffer.size(), &cmdReplyBytes, 200);
@@ -83,11 +84,11 @@ void Harrier::sendInquiry(const internal::ViscaPacket& inqPacket) {
     
     unsigned char bytesReceived = 0;
     commsInternal.onReplyBuffer.resize(128);
-    
-    status = HarrierCommsUSBReceive(commsInternal.device,  commsInternal.onReplyBuffer.data(), commsInternal.onReplyBuffer.size(), &bytesReceived, 
-                                   500);
-    
-    throwOnInternalCommsError(status, internal::CommandType::INQUIRY);
+    {
+        std::lock_guard<std::mutex> lock(commsMtx);
+        status = HarrierCommsUSBReceive(commsInternal.device,  commsInternal.onReplyBuffer.data(), commsInternal.onReplyBuffer.size(), &bytesReceived, 500);
+        throwOnInternalCommsError(status, internal::CommandType::INQUIRY);
+    }
     commsInternal.onReplyBuffer.resize(bytesReceived);
 }
 

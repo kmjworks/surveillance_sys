@@ -38,10 +38,10 @@ int main(int argc, char** argv) {
         
         Harrier harrier36x(deviceHandle);
 
-        // harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_POWER_CYCLE));
+        harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_POWER_CYCLE));
         // harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_LENS_INIT));
-        harrier36x.sendInquiry(harrier36x.createViscaInquiryPacket(HARRIER_INTERFACE_HW_STATUS));
-        harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_ZOOM_TRIGGER_AF));
+        //harrier36x.sendInquiry(harrier36x.createViscaInquiryPacket(HARRIER_INTERFACE_FW_VER));
+        // harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_ZOOM_TRIGGER_AF));
         // harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_ZOOM_TELE));
         //harrier36x.sendCommand(harrier36x.createViscaCommandPacket(HARRIER_ZOOM_STOP));
         
