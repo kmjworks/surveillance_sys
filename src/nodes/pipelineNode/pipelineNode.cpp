@@ -35,7 +35,6 @@ bool PipelineNode::initializePipelineNode() {
     rosInterface.pub_processedFrames = imageTransport.advertise("pipeline/runtime_processedFrames", 1);
     rosInterface.pub_runtimeErrors = nh.advertise<std_msgs::String>("pipeline/runtime_errors", 10);
 
-
     components.cameraSrc = std::make_unique<pipeline::HarrierCaptureSrc>(params.devicePath, params.frameRate, params.nightMode);
     components.pipelineInternal = std::make_unique<pipeline::PipelineInternal>(params.frameRate, params.nightMode);
     components.pipelineIntegratedMotionDetection = std::make_unique<pipeline::PipelineInitialDetectionLite>(params.motionMinAreaPx, params.motionDownScale, params.motionHistory, params.motionSamplingRate);
@@ -188,9 +187,9 @@ void PipelineNode::processingLoop() {
         
         motionPresence = components.pipelineIntegratedMotionDetection->detect(processedFrame, motionRects);
         
-        if(motionPresence) {
-            publishMotionEventFrame(data.frame, data.timestamp);
-        }
+    
+        publishMotionEventFrame(data.frame, data.timestamp);
+        
     }
 }
 

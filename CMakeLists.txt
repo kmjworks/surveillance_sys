@@ -33,6 +33,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(CUDA REQUIRED)
 find_package(OpenCV 4.10.0 REQUIRED COMPONENTS core dnn imgproc cudaimgproc cudabgsegm)
 find_package(Threads REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0>=1.8)
@@ -134,6 +135,7 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
   ${CUDA_INCLUDE_DIRS}
   ${TensorRT_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
   src/components/utilities/ThreadSafeQueue
 )
 
@@ -147,6 +149,7 @@ link_directories(
 set(COMMON_DEPS
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
+  Eigen3::Eigen
   Threads::Threads
 )
 
@@ -161,6 +164,8 @@ set(GSTREAMER_DEPS
 # # Declare a C++ executable
 # # With catkin_make all packages are built within a single CMake context
 # # The recommended prefix ensures that target names across packages don't collide
+
+add_subdirectory(src/components)
 
 add_executable(motion_detection_node 
   src/nodes/motionDetectionNode/motionDetectionNode_trt.cpp 
@@ -210,11 +215,26 @@ target_link_libraries(diagnostics_node
   ${COMMON_DEPS}
 )
 
+add_executable(motion_tracking_node
+  src/nodes/motionTrackingNode/motionTrackingNode.cpp
+  src/nodes/motionTrackingNode/main.cpp
+)
+add_dependencies(motion_tracking_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(motion_tracking_node
+  ${COMMON_DEPS}
+  ${CUDA_LIBRARIES}
+  nvinfer
+  nvinfer_plugin
+  nvonnxparser
+  deepSort
+)
+
 install(TARGETS
   motion_detection_node
   camera_node
   video_pipeline_node
   diagnostics_node
+  motion_tracking_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}  
 )
 

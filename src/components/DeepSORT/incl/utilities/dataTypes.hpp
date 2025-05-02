@@ -4,8 +4,9 @@
 #include <vector>
 #include <Eigen/Core>
 #include <Eigen/Dense>
+#include "opencv2/core/types.hpp"
 
-using DetectionBox = struct DetectionBox {
+typedef struct DetectionBox {
 
     DetectionBox(float x1=0, float y1=0, float x2=0, float y2=0, float confidence=0, float classIdentifier=-1, float trackIdentifier=-1) {
         this->x1 = x1;
@@ -21,7 +22,7 @@ using DetectionBox = struct DetectionBox {
     float confidence;
     float classIdentifier;
     float trackIdentifier;
-};
+} DetectionBox;
 
 using CLSCONF = struct CLSCONF {
     CLSCONF() {
@@ -38,7 +39,7 @@ using CLSCONF = struct CLSCONF {
     float conf;
 };
 
-namespace TrackingInternal {
+namespace tracking {
     using DETECTBOX = Eigen::Matrix<float, 1, 4, Eigen::RowMajor>;
     using DETECTBOXSS = Eigen::Matrix<float, -1, 4, Eigen::RowMajor>;
     using FEATURE = Eigen::Matrix<float, 1, 256, Eigen::RowMajor>;
@@ -48,7 +49,7 @@ namespace TrackingInternal {
 
 
 
-namespace KalmanFilterInternal {
+namespace kalman {
     using KAL_MEAN = Eigen::Matrix<float, 1, 8, Eigen::RowMajor>;
     using KAL_COVA = Eigen::Matrix<float, 8, 8, Eigen::RowMajor>;
     using KAL_HMEAN = Eigen::Matrix<float, 1, 4, Eigen::RowMajor>;
@@ -59,18 +60,27 @@ namespace KalmanFilterInternal {
 
 
 
-namespace MotionTracker {
-    using RESULT_DATA = std::pair<int, TrackingInternal::DETECTBOX>;
-    using TRACKER_DATA = std::pair<int, TrackingInternal::FEATURESS>;
+namespace motiontracker {
+    using RESULT_DATA = std::pair<int, tracking::DETECTBOX>;
+    using TRACKER_DATA = std::pair<int, tracking::FEATURESS>;
     using MATCH_DATA = std::pair<int, int>;
     using TRACKER_MATCH = struct tracks {
         std::vector<MATCH_DATA> matches;
         std::vector<int> unmatchedTracks;
         std::vector<int> unmatchedDetections;
     };
+
+    using FeatureVector = std::vector<float>;
+
+    using TRACK_OUTPUT_DATA = struct TrackOutput {
+        int trackIdentifier = -1;
+        cv::Rect_<float> bbox;
+        bool isConfirmed = true;
+    };
+
+    
 }
 
-
-namespace LinearAssignment {
+namespace linearassignment {
     using DYNAMICM = Eigen::Matrix<float, -1, -1, Eigen::RowMajor>;
 }
