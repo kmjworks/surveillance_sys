@@ -28,10 +28,16 @@ namespace pipeline {
 
     };
 
+    struct FrameData {
+        cv::Mat frame;
+        ros::Time timestamp;
+    };
+
     struct PipelineComponents {
         std::unique_ptr<HarrierCaptureSrc> cameraSrc;
         std::unique_ptr<PipelineInternal> pipelineInternal;
         std::unique_ptr<PipelineInitialDetectionLite> pipelineIntegratedMotionDetection;
+       
     };
 
     struct ConfigurationParameters {
@@ -49,10 +55,21 @@ namespace pipeline {
         std::string outputPath;
     };
 
-    struct FrameData {
-        cv::Mat frame;
-        ros::Time timestamp;
+    struct Workers {
+        std::thread captureThread;
+        std::thread processingThread;
     };
+
+    
+
+    namespace limits {
+        struct CaptureLoop {
+            bool rateLimited = false;
+            int frameSkipCounter = 0;
+        };
+    }
+
+    
 }
 
 class PipelineNode {
@@ -71,16 +88,14 @@ class PipelineNode {
         ros::NodeHandle& nh;
         ros::NodeHandle& nh_priv;
         image_transport::ImageTransport imageTransport;
-
-        pipeline::ROSInterface rosInterface;
-        pipeline::PipelineComponents components;
-        pipeline::ConfigurationParameters params;
         ThreadSafeQueue<pipeline::FrameData> rawFrameQueue;
 
-        std::thread captureThread;
-        std::thread processingThread;
+        pipeline::ROSInterface rosInterface;
+        pipeline::ConfigurationParameters configuration;
+        pipeline::PipelineComponents components;
+        pipeline::Workers workerThreads;
         std::atomic<bool> pipelineRunning;
-
+        
         void publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishError(const std::string& errorMsg);
