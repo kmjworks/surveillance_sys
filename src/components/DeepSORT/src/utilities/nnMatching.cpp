@@ -1,5 +1,6 @@
 #include "../../incl/utilities/nnMatching.hpp"
 #include <iostream>
+#include "ros/console.h"
 
 using namespace Eigen;
 
@@ -45,6 +46,11 @@ void
   for (motiontracker::TRACKER_DATA & data:tid_feats) {
         int track_id = data.first;
         tracking::FEATURESS newFeatOne = data.second;
+
+        if (newFeatOne.rows() == 0 || newFeatOne.cols() != 256) {
+            ROS_WARN("[NearNeighborDisMetric] Skipping invalid feature matrix for track %d", track_id);
+            continue;
+        }
 
         if (samples.find(track_id) != samples.end()) {  //append
             int oldSize = samples[track_id].rows();

@@ -88,12 +88,11 @@ void Tracker::update(const model_internal::DETECTIONSV2 &detectionsv2) {
     std::vector<int> active_targets;
     std::vector<motiontracker::TRACKER_DATA> tid_features;
     for (Track &track : tracks) {
-        if (track.isConfirmed() == false)
-            continue;
+        if (track.isConfirmed() == false) continue;
         active_targets.push_back(track.track_id);
         tid_features.push_back(std::make_pair(track.track_id, track.features));
-        tracking::FEATURESS t = tracking::FEATURESS(0, 256);
-        track.features = t;
+        //tracking::FEATURESS t = tracking::FEATURESS(0, 256);
+        //track.features = t;
     }
     this->metric->partialFit(tid_features, active_targets);
 }

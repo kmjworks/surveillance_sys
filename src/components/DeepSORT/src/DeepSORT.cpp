@@ -54,9 +54,7 @@ void DeepSort::sort(cv::Mat& frame, std::vector<DetectionBox>& dets) {
         dets.push_back(b);
     }
 
-    size_t min_size = std::min(results.size(), dets.size());
-    
-    for (size_t i = 0; i < min_size; ++i) {
+    for (int i = 0; i < results.size(); ++i) {
         CLSCONF c = results[i].first;
         dets[i].classIdentifier = c.cls;
         dets[i].confidence = c.conf;
