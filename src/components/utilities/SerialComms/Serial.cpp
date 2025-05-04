@@ -284,7 +284,7 @@ void Serial::setReadCallback(ReadCallback callback, std::size_t minBytes) {
 
 void Serial::cancelReadCallback() {
     ptrImpl->stopReadThread();
-    ptrImpl->readCallback = nullptr;
+    ptrImpl->readCallback = 0;
 }
 
 void Serial::flush() const {

@@ -1,51 +1,51 @@
 <launch>
-    <!-- Load parameters -->
-    <rosparam command="load" 
-              file="$(find surveillance_system)/config/simulation_params.yaml" />
+  <!-- Load parameters -->
+  <rosparam command="load" 
+            file="$(find surveillance_system)/config/simulation_params.yaml" />
 
-    <!-- Camera Node -->
-    <node pkg="surveillance_system" 
-          type="camera_node" 
-          name="cameraNode" 
-          output="screen">
-        <param name="frame_width" value="1920"/>
-        <param name="frame_height" value="1080"/>
-        <param name="frame_rate" value="30"/>
-    </node>
+  <!-- Camera Node -->
+  <node pkg="surveillance_system" 
+        type="camera_node" 
+        name="cameraNode" 
+        output="screen">
+      <param name="frame_width" value="1920"/>
+      <param name="frame_height" value="1080"/>
+      <param name="frame_rate" value="30"/>
+  </node>
 
-    <!-- Motion Detector Node -->
-    <node pkg="surveillance_system" 
-          type="motion_detection_node" 
-          name="motionDetectionNode" 
-          output="screen">
-        <param name="detection_threshold" value="30.0"/>
-    </node>
+  <!-- Motion Detector Node -->
+  <node pkg="surveillance_system" 
+        type="motion_detection_node" 
+        name="motionDetectionNode" 
+        output="screen">
+      <param name="detection_threshold" value="30.0"/>
+  </node>
 
-    <!-- Capture Manager Node -->
-    <node pkg="surveillance_system" 
-          type="video_pipeline_node" 
-          name="pipelineNode" 
-          output="screen">
-        <param name="buffer_size" value="30"/>
-        <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
-    </node>
+  <!-- Capture Manager Node -->
+  <node pkg="surveillance_system" 
+        type="video_pipeline_node" 
+        name="pipelineNode" 
+        output="screen">
+      <param name="buffer_size" value="30"/>
+      <param name="output_path" value="$(env HOME)/surveillance_recordings"/>
+  </node>
 
-    <!-- Image Visualization Nodes -->
-    <node pkg="image_view" 
-          type="image_view" 
-          name="raw_view">
-        <remap from="image" to="/cameraNode/image_raw"/>
-    </node>
-    
-    <node pkg="image_view" 
-          type="image_view" 
-          name="debug_view">
-        <remap from="image" to="/motionDetectionNode/debug_image"/>
-    </node>
-    
-    <node pkg="image_view" 
-          type="image_view" 
-          name="pipeline_view">
-        <remap from="image" to="/pipelineNode/pipeline/runtime_processedFrames"/>
-    </node>
+  <!-- Image Visualization Nodes -->
+  <node pkg="image_view" 
+        type="image_view" 
+        name="raw_view">
+      <remap from="image" to="/cameraNode/image_raw"/>
+  </node>
+  
+  <node pkg="image_view" 
+        type="image_view" 
+        name="debug_view">
+      <remap from="image" to="/motionDetectionNode/debug_image"/>
+  </node>
+  
+  <node pkg="image_view" 
+        type="image_view" 
+        name="pipeline_view">
+      <remap from="image" to="/pipelineNode/pipeline/runtime_processedFrames"/>
+  </node>
 </launch>
