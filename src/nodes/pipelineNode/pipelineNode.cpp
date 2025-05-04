@@ -1,35 +1,32 @@
 #include "pipelineNode.hpp"
 #include "components/harrierCaptureSrc.hpp"
-#include "components/pipelineInternal.hpp"
 #include "components/pipelineInitialDetectionLite.hpp"
+#include "components/pipelineInternal.hpp"
 
-//#include "surveillance_system/motion_detection_events_array.h"
-// #include "surveillance_system/motion_event.h"
-//#include <sensor_msgs/RegionOfInterest.h>
-//#include <geometry_msgs/Point.h>
+// #include "surveillance_system/motion_detection_events_array.h"
+//  #include "surveillance_system/motion_event.h"
+// #include <sensor_msgs/RegionOfInterest.h>
+// #include <geometry_msgs/Point.h>
 
 PipelineNode::PipelineNode(ros::NodeHandle& nh, ros::NodeHandle& privateHandle) :
-    nh(nh), nh_priv(privateHandle), imageTransport(nh), rawFrameQueue(loadParameters(nh_priv, params)), pipelineRunning(false) {
-    
-    params.devicePath = "/dev/video0";
-    params.outputPath = "~/sursys_recordings";
+    nh(nh), nh_priv(privateHandle), imageTransport(nh), pipelineRunning(false) {
+    ROS_INFO("Initializing Pipeline Node...");
 
-    params.frameRate = 30;
-    params.nightMode = false;
-    params.showDebugFrames = true;
     params.motionSamplingRate = 1;
     params.bufferSize = 100;
     params.motionMinAreaPx = 800;
     params.motionDownScale = 0.5f;
-    params.motionHistory = 120;    
+    params.motionHistory = 120;
 
+    loadParameters(nh_priv, params);
 }
 
-PipelineNode::~PipelineNode() {
-    shutdown();
+PipelineNode::~PipelineNode() { 
+    shutdown(); 
 }
 
 bool PipelineNode::initializePipelineNode() {
+
     ROS_INFO("Initializing Pipeline Node...");
     rosInterface.pub_motionEvents = imageTransport.advertise("pipeline/runtime_potentialMotionEvents", 1);
     rosInterface.pub_processedFrames = imageTransport.advertise("pipeline/runtime_processedFrames", 1);
@@ -38,8 +35,9 @@ bool PipelineNode::initializePipelineNode() {
     components.cameraSrc = std::make_unique<pipeline::HarrierCaptureSrc>(params.devicePath, params.frameRate, params.nightMode);
     components.pipelineInternal = std::make_unique<pipeline::PipelineInternal>(params.frameRate, params.nightMode);
     components.pipelineIntegratedMotionDetection = std::make_unique<pipeline::PipelineInitialDetectionLite>(params.motionMinAreaPx, params.motionDownScale, params.motionHistory, params.motionSamplingRate);
+    components.rawFrameQueue.initialize(params.bufferSize);
 
-    if(!components.cameraSrc->initializeRawSrcForCapture()) {
+    if (!components.cameraSrc->initializeRawSrcForCapture()) {
         publishError("Failed to initialize camera after multiple attempts.");
         ROS_ERROR("Failed to initialize camera source.");
         return false;
@@ -63,6 +61,8 @@ int PipelineNode::loadParameters(ros::NodeHandle& nh_priv, pipeline::Configurati
     nh_priv.param<float>("motion_detector/downscale", params.motionDownScale, params.motionDownScale);
     nh_priv.param<int>("motion_detector/history", params.motionHistory, params.motionHistory);
 
+
+
     ROS_INFO("Pipeline parameters loaded.");
     return params.bufferSize;
 }
@@ -71,18 +71,17 @@ void PipelineNode::publishRawFrame(const cv::Mat& frame, const ros::Time& timest
     try {
         cv_bridge::CvImage cvImage;
         cvImage.encoding = (frame.channels() == 1 ? sensor_msgs::image_encodings::MONO8 : sensor_msgs::image_encodings::BGR8);
-        cvImage.image = frame; 
+        cvImage.image = frame;
         cvImage.header.stamp = timestamp;
         cvImage.header.frame_id = "camera_link";
 
         rosInterface.pub_processedFrames.publish(cvImage.toImageMsg());
-    } catch (const cv_bridge::Exception &e) {
+    } catch (const cv_bridge::Exception& e) {
         publishError("cv_bridge exception during frame publishing : " + std::string(e.what()));
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
         publishError("Runtime exception during frame publishing : " + std::string(e.what()));
     }
 }
-
 
 void PipelineNode::publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp) {
     try {
@@ -94,13 +93,12 @@ void PipelineNode::publishMotionEventFrame(const cv::Mat& frame, const ros::Time
 
         rosInterface.pub_motionEvents.publish(img.toImageMsg());
 
-    } catch (const cv_bridge::Exception &e) {
+    } catch (const cv_bridge::Exception& e) {
         publishError("cv_bridge exception during frame publishing : " + std::string(e.what()));
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
         publishError("Runtime exception during frame publishing : " + std::string(e.what()));
     }
 }
-
 
 void PipelineNode::publishError(const std::string& errorMsg) {
     ROS_ERROR_STREAM_THROTTLE(5.0, "[PipelineNode] " << errorMsg);
@@ -119,13 +117,11 @@ void PipelineNode::startWorkerThreads() {
 
 void PipelineNode::stopWorkerThreads() {
     pipelineRunning = false;
-
     ROS_INFO("[PipelineNode] Stopping Pipeline worker threads.");
 
-    rawFrameQueue.stopWaitingThreads();
+    components.rawFrameQueue.stopWaitingThreads();
     if (captureThread.joinable()) captureThread.join();
     if (processingThread.joinable()) processingThread.join();
-
     ROS_INFO("[PipelineNode] Pipeline worker threads stopped.");
 }
 
@@ -144,7 +140,7 @@ void PipelineNode::captureLoop() {
         if (captureStatus) {
             if (!rawFrame.empty()) {
                 pipeline::FrameData data{rawFrame.clone(), captureTimestamp};
-                if (!rawFrameQueue.try_push(std::move(data))) {
+                if (!components.rawFrameQueue.try_push(std::move(data))) {
                     ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Raw frame queue full, dropping frame.");
                 }
             } else {
@@ -157,6 +153,7 @@ void PipelineNode::captureLoop() {
     ROS_INFO("[PipelineNode - Capture Thread] Exiting.");
 }
 
+
 void PipelineNode::processingLoop() {
     ROS_INFO("[PipelineNode - Processing Thread] Thread started.");
     cv::Mat processedFrame;
@@ -165,7 +162,7 @@ void PipelineNode::processingLoop() {
     bool motionPresence = false;
 
     while(pipelineRunning && ros::ok()) {
-        std::optional<pipeline::FrameData> dataOpt = rawFrameQueue.pop();
+        std::optional<pipeline::FrameData> dataOpt = components.rawFrameQueue.pop();
 
         if(!dataOpt.has_value()) {
             ROS_WARN("[PipelineNode - Processing Thread] Queue pop returned nullopt unexpectedly.");
@@ -193,6 +190,7 @@ void PipelineNode::processingLoop() {
     }
 }
 
+
 void PipelineNode::shutdown() {
     ROS_INFO("Shutting down pipeline node.");
 
@@ -205,5 +203,5 @@ void PipelineNode::shutdown() {
     components.pipelineInternal.reset();
     components.pipelineIntegratedMotionDetection.reset();
 
-    ROS_INFO("Pipeline node shutdown complete.");
+    ROS_INFO("[PipelineNode] Shutdown complete.");
 }
