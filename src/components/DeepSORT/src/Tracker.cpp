@@ -91,8 +91,8 @@ void Tracker::update(const model_internal::DETECTIONSV2 &detectionsv2) {
         if (track.isConfirmed() == false) continue;
         active_targets.push_back(track.track_id);
         tid_features.push_back(std::make_pair(track.track_id, track.features));
-        //tracking::FEATURESS t = tracking::FEATURESS(0, 256);
-        //track.features = t;
+        tracking::FEATURESS t = tracking::FEATURESS(0, 256);
+        track.features = t;
     }
     this->metric->partialFit(tid_features, active_targets);
 }
@@ -144,7 +144,7 @@ void Tracker::initTrack(const DETECTION_ROW &detection) {
     kalman::KAL_MEAN mean = data.first;
     kalman::KAL_COVA covariance = data.second;
 
-    this->tracks.emplace_back(mean, covariance, this->nextIndex, this->nInit, this->maxAge, detection.feature);
+    this->tracks.push_back(Track(mean, covariance, this->nextIndex, this->nInit, this->maxAge, detection.feature));
     nextIndex += 1;
 }
 void Tracker::initTrack(const DETECTION_ROW &detection, CLSCONF clsConf) {
@@ -152,8 +152,8 @@ void Tracker::initTrack(const DETECTION_ROW &detection, CLSCONF clsConf) {
     kalman::KAL_MEAN mean = data.first;
     kalman::KAL_COVA covariance = data.second;
 
-    this->tracks.emplace_back(mean, covariance, this->nextIndex, this->nInit, this->maxAge,
-                                 detection.feature, clsConf.cls, clsConf.conf);
+    this->tracks.push_back(Track(mean, covariance, this->nextIndex, this->nInit, this->maxAge,
+                                 detection.feature, clsConf.cls, clsConf.conf));
     nextIndex += 1;
 }
 

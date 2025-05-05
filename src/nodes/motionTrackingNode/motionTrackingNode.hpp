@@ -35,4 +35,6 @@ class MotionTrackingNode {
         void initROSIO();
         void initComponents();
 
+        void publishTrackingVisualization(cv::Mat& image, std::vector<DetectionBox>& boundingBoxes);
+
 };

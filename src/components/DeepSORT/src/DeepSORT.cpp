@@ -41,7 +41,7 @@ void DeepSort::sort(cv::Mat& frame, std::vector<DetectionBox>& dets) {
     result.clear();
     results.clear();
 
-    if (!detections.empty()) {
+    if (detections.size() > 0) {
         model_internal::DETECTIONSV2 detectionsv2 = make_pair(clsConf, detections);
         sort(frame, detectionsv2);
     }
