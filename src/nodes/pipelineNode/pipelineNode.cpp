@@ -184,7 +184,7 @@ void PipelineNode::processingLoop() {
         
         motionPresence = components.pipelineIntegratedMotionDetection->detect(processedFrame, motionRects);
         
-    
+        
         publishMotionEventFrame(data.frame, data.timestamp);
         
     }

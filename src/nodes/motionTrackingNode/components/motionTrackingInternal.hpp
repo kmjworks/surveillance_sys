@@ -1,3 +1,4 @@
+#include <thread>
 #include "../../../components/DeepSORT/incl/DeepSORT.hpp" 
 #include "message_filters/subscriber.h"
 #include "message_filters/sync_policies/approximate_time.h"
@@ -29,6 +30,7 @@ namespace motion_tracking {
     
     struct MotionTrackerROSInterface {
         ros::Publisher pub_trackedObjects;
+        ros::Publisher pub_trackingObjectsViz;
         message_filters::Subscriber<sensor_msgs::Image> sub_rawImages;
         message_filters::Subscriber<vision_msgs::Detection2DArray> sub_detection;
         typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, vision_msgs::Detection2DArray> SyncPolicy;
@@ -38,6 +40,7 @@ namespace motion_tracking {
     struct MotionTrackerComponents {
         std::unique_ptr<DeepSort> deepSort;
         std::shared_ptr<nvinfer1::ILogger> gLogger;
+        std::thread publishingThread;
     };
     
 }

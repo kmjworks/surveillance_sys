@@ -16,7 +16,7 @@ do { \
 } while(0)
 
 FeatureTensor::FeatureTensor(const int maxBatchSize, const cv::Size& imgShape, const int featureDim, int gpuID, nvinfer1::ILogger* gLogger) :
-    runtime(nullptr), engine(nullptr),context(nullptr), 
+    engineInterface{nullptr, nullptr, nullptr},
     imgInternal{maxBatchSize, imgShape, featureDim}, cudaStream{0, INPUTSTREAM_SIZE, OUTPUTSTREAM_SIZE, false, new float[INPUTSTREAM_SIZE], new float[OUTPUTSTREAM_SIZE], {nullptr, nullptr}, nullptr, 0, 0}, 
     gLogger(gLogger),
     format{{0.485, 0.456, 0.406}, {0.229, 0.224, 0.225}, "output", "input"} {
@@ -25,13 +25,28 @@ FeatureTensor::FeatureTensor(const int maxBatchSize, const cv::Size& imgShape, c
 }
 
 FeatureTensor::~FeatureTensor() {
-    delete [] cudaStream.inputBuffer; 
-    delete [] cudaStream.outputBuffer;
-    if (cudaStream.initFlag) {
-        // cudaStreamSynchronize(cudaStream);
-        cudaStreamDestroy(cudaStream.cudaStream);
-        cudaFree(cudaStream.buffers[cudaStream.inputIndex]);
-        cudaFree(cudaStream.buffers[cudaStream.outputIndex]);
+    try {
+        if(cudaStream.initFlag) cudaStreamSynchronize(cudaStream.cudaStream);
+
+        delete[] cudaStream.inputBuffer; 
+        delete[] cudaStream.outputBuffer;
+
+        if(cudaStream.initFlag) {
+            if(cudaStream.buffers[cudaStream.inputIndex]) {
+                cudaFree(cudaStream.buffers[cudaStream.inputIndex]);
+                cudaStream.buffers[cudaStream.inputIndex] = nullptr;
+            }
+
+            if(cudaStream.buffers[cudaStream.outputIndex]) {
+                cudaFree(cudaStream.buffers[cudaStream.outputIndex]);
+                cudaStream.buffers[cudaStream.outputIndex] = nullptr;
+            }
+            
+            cudaStreamDestroy(cudaStream.cudaStream);
+            cudaStream.cudaStream = nullptr;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[FeatureTensor] Exception during destruction: " << e.what() << std::endl;
     }
 }
 
@@ -60,9 +75,10 @@ bool FeatureTensor::getRectsFeature(model_internal::DETECTIONS& det) {
 }
 
 void FeatureTensor::loadEngine(const std::string& enginePath) {
+    
     // Deserialize model
-    runtime = nvinfer1::createInferRuntime(*gLogger);
-    assert(runtime != nullptr);
+    engineInterface.runtime.reset(nvinfer1::createInferRuntime(*gLogger));
+    assert(engineInterface.runtime != nullptr);
     std::ifstream engineStream(enginePath, std::ios::binary);
     std::string engineCache("");
     while (engineStream.peek() != EOF) {
@@ -71,12 +87,13 @@ void FeatureTensor::loadEngine(const std::string& enginePath) {
         engineCache.append(buffer.str());
     }
     engineStream.close();
-    engine = runtime->deserializeCudaEngine(engineCache.data(), engineCache.size(), nullptr);
-    ROS_INFO("[FeatureExtractor] Engine deserialized.");
 
-    assert(engine != nullptr);
-    context = engine->createExecutionContext();
-    assert(context != nullptr);
+    engineInterface.engine.reset(engineInterface.runtime->deserializeCudaEngine(engineCache.data(), engineCache.size(), nullptr));
+    ROS_INFO("[FeatureExtractor] Engine deserialized.");
+    assert(engineInterface.engine != nullptr);
+
+    engineInterface.context.reset(engineInterface.engine->createExecutionContext());
+    assert(engineInterface.context != nullptr);
     initResource();
 } 
 
@@ -104,10 +121,10 @@ void FeatureTensor::loadOnnxRuntime(const std::string& onnxPath) {
     auto parsed = parser->parseFromFile(onnxPath.c_str(), static_cast<int>(nvinfer1::ILogger::Severity::kWARNING));
     assert(parsed);
     config->setMaxWorkspaceSize(1 << 20);
-    engine = builder->buildEngineWithConfig(*network, *config);
-    assert(engine != nullptr);
-    context = engine->createExecutionContext();
-    assert(context != nullptr);
+    engineInterface.engine.reset(builder->buildEngineWithConfig(*network, *config));
+    assert(engineInterface.engine != nullptr);
+    engineInterface.context.reset(engineInterface.engine->createExecutionContext());
+    assert(engineInterface.context != nullptr);
     initResource();
 }
 
@@ -128,8 +145,8 @@ void FeatureTensor::runInference(std::vector<cv::Mat>& imgMats) {
 }
 
 void FeatureTensor::initResource() {
-    cudaStream.inputIndex = engine->getBindingIndex(format.inputName.c_str());
-    cudaStream.outputIndex = engine->getBindingIndex(format.outputName.c_str());
+    cudaStream.inputIndex = engineInterface.engine->getBindingIndex(format.inputName.c_str());
+    cudaStream.outputIndex = engineInterface.engine->getBindingIndex(format.outputName.c_str());
 
     
     CUDA_CHECK(cudaStreamCreate(&cudaStream.cudaStream));
@@ -149,9 +166,9 @@ void FeatureTensor::runInference(float* inputBuffer, float* outputBuffer) {
     
     CUDA_CHECK(cudaMemcpyAsync(cudaStream.buffers[cudaStream.inputIndex], inputBuffer, cudaStream.inputStreamSize * sizeof(float), cudaMemcpyHostToDevice, cudaStream.cudaStream));
     nvinfer1::Dims4 inputDims{cudaStream.curBatchSize, 3, imgInternal.imgShape.height, imgInternal.imgShape.width};
-    context->setBindingDimensions(0, inputDims);
+    engineInterface.context->setBindingDimensions(0, inputDims);
     
-    context->enqueueV2(cudaStream.buffers, cudaStream.cudaStream, nullptr);
+    engineInterface.context->enqueueV2(cudaStream.buffers, cudaStream.cudaStream, nullptr);
     CUDA_CHECK(cudaMemcpyAsync(outputBuffer, cudaStream.buffers[cudaStream.outputIndex], cudaStream.outputStreamSize * sizeof(float), cudaMemcpyDeviceToHost, cudaStream.cudaStream));
     cudaError_t syncStatus = cudaStreamSynchronize(cudaStream.cudaStream);
     if(syncStatus != cudaSuccess) ROS_ERROR("[FeatureTensor] cudaStreamSynchronize Error: %s", cudaGetErrorString(syncStatus));
@@ -183,28 +200,14 @@ void FeatureTensor::convertMatToStream(std::vector<cv::Mat>& imgMats, float* str
 void FeatureTensor::decodeStreamToDet(float* stream, model_internal::DETECTIONS& det) {
     int i = 0;
 
-    ROS_INFO("decodeStreamToDet - Processing %zu detections with batch size %d", det.size(), cudaStream.curBatchSize);
+    //ROS_INFO("decodeStreamToDet - Processing %zu detections with batch size %d", det.size(), cudaStream.curBatchSize);
 
     for(DETECTION_ROW& dbox : det) {
-        if (i >= cudaStream.curBatchSize) {
-            ROS_INFO("decodeStreamToDet - Reached batch limit, processed %d/%zu detections", i, det.size());
-            break;
+        for(int j = 0; j < imgInternal.featureDim; ++j) {
+            dbox.feature[j] = stream[i*imgInternal.featureDim + j];
+            ++i;
         }
-
-        if (dbox.feature.rows() != 1 || dbox.feature.cols() < imgInternal.featureDim) {
-            dbox.feature = tracking::FEATURE::Zero();
-        }
-        for (int j = 0; j < imgInternal.featureDim; ++j) {
-            int idx = i * imgInternal.featureDim + j;
-            if (idx < cudaStream.outputStreamSize) {
-                dbox.feature(0, j) = stream[idx];
-            } else {
-                ROS_ERROR("decodeStreamToDet - Index out of bounds: %d >= %d", idx, cudaStream.outputStreamSize);
-                break;
-            }
-        }
-        i++;
     }
 
-    ROS_INFO("decodeStreamToDet - Completed processing %d detections", i);
+    //ROS_INFO("decodeStreamToDet - Completed processing %d detections", i);
 }

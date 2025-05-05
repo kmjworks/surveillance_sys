@@ -12,9 +12,12 @@
 
 
 namespace inference {
-    using runtime = nvinfer1::IRuntime*;
-    using engine =  nvinfer1::ICudaEngine*;
-    using context = nvinfer1::IExecutionContext*;
+    struct TensorRTInterface {
+        std::unique_ptr<nvinfer1::IRuntime> runtime = nullptr;
+        std::unique_ptr<nvinfer1::ICudaEngine> engine = nullptr;
+        std::unique_ptr<nvinfer1::IExecutionContext> context = nullptr;
+    };
+    
     using inputBuffer = float* const;
     using outputBuffer = float* const;
 }
@@ -61,9 +64,7 @@ class FeatureTensor {
         void convertMatToStream(std::vector<cv::Mat>& imgMats, float* stream);
         void decodeStreamToDet(float* stream, model_internal::DETECTIONS& det);
 
-        inference::runtime runtime;
-        inference::engine engine;
-        inference::context context;
+        inference::TensorRTInterface engineInterface; 
         ImageProperties imgInternal;
         CudaStreamProperties cudaStream;
         nvinfer1::ILogger* gLogger;
