@@ -52,10 +52,13 @@ FetchContent_MakeAvailable(fmt)
 
 add_message_files(
   FILES
+  key_value.msg
   motion_event.msg
   motion_detection_events_array.msg
   pipeline_metrics.msg
   camera_status.msg
+  storage_status.msg
+  diagnostic_event.msg
 )
 
 generate_messages(
