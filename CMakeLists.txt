@@ -55,6 +55,7 @@ add_message_files(
   motion_event.msg
   motion_detection_events_array.msg
   pipeline_metrics.msg
+  camera_status.msg
 )
 
 generate_messages(
