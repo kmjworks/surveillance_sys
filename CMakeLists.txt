@@ -141,6 +141,7 @@ include_directories(
   ${TensorRT_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
   src/components/utilities/ThreadSafeQueue
+  //src/components/utilities/ROS
 )
 
 link_directories(
@@ -195,6 +196,17 @@ target_link_libraries(camera_node
   ${COMMON_DEPS}
 )
 
+add_executable(capture_node
+  src/nodes/captureNode/main.cpp
+  src/nodes/captureNode/captureNode.cpp
+  src/nodes/captureNode/components/captureNodeInternal.cpp
+)
+add_dependencies(capture_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(capture_node 
+  ${COMMON_DEPS}
+  utilities
+)
+
 
 add_executable(video_pipeline_node 
   src/nodes/pipelineNode/main.cpp
@@ -215,7 +227,10 @@ add_executable(diagnostics_node
   src/nodes/diagnosticsNode/main.cpp
 )
 add_dependencies(diagnostics_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(diagnostics_node 
+target_include_directories(diagnostics_node PRIVATE
+  ${ROS_UTILS_PATH}
+)
+target_link_libraries(diagnostics_node PUBLIC
   ${COMMON_DEPS}
 )
 

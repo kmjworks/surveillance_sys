@@ -3,7 +3,6 @@
 #include <thread>
 #include <surveillance_system/diagnostic_event.h>
 #include "ros/node_handle.h"
-#include "ros/callback_queue.h"
 
 #include "ThreadSafeQueue.hpp"
 
@@ -31,8 +30,6 @@ namespace diagnostics {
     struct Components {
         ThreadSafeQueue<surveillance_system::diagnostic_event> diagnosticEventQueue;
         ThreadSafeQueue<surveillance_system::diagnostic_event> diagnosticSeverePriorityQueue;
-        ros::CallbackQueue msgProcessingQueue;
-        ros::CallbackQueue msgPublishingQueue;
 
         std::thread publishingThread;
         std::thread processingThread;
