@@ -27,7 +27,8 @@ void DiagnosticsNode::initROSIO() {
     rosInterface.sub_motionTrackerStatus = nh.subscribe("yolo/runtime_status", 1, &DiagnosticsNode::diagnosticsReceiveHandler, this);
     rosInterface.sub_captureStatus = nh.subscribe("capture/runtime_status", 1, &DiagnosticsNode::diagnosticsReceiveHandler, this);
 
-    rosInterface.pub_diagnosticData = nh.advertise<surveillance_system::diagnostic_event>("system/runtime_diagnostics", configuration.queueSize);
+    rosInterface.pub_diagnosticData = nh.advertise<surveillance_system::diagnostic_event>("diagnostics/runtime_diagnostics", configuration.queueSize);
+    
     return;
 }
 
