@@ -1,10 +1,6 @@
-#include <ros/ros.h>
+#include "captureNode.hpp"
+#include "EventLoopTimeKeeper"
 
-class CaptureNode {
-public:
-    std::string captureLogPath;
-    std::string captureMetricsPath;
+CaptureNode::CaptureNode(ros::NodeHandle& nh, ros::NodeHandle& pnh) : nh(nh), private_nh(pnh) {
 
-private:
-    ros::NodeHandle nh;
-};
+}
