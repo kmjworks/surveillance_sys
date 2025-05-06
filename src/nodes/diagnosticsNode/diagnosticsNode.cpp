@@ -16,11 +16,18 @@ DiagnosticsNode::~DiagnosticsNode() {
 void DiagnosticsNode::loadParameters() {
     private_nh.param<int>("queue_size", configuration.queueSize, 100);
     private_nh.param<int>("priority_queue_size", configuration.priorityQueueSize, 10);
+
     return;
 }
 
 void DiagnosticsNode::initROSIO() {
-    rosInterface.sub_cameraStatus = nh.subscribe("pipeline/runtime_status", 10, &DiagnosticsNode::diagnosticsReceiveHandler, this);
+    rosInterface.sub_cameraStatus = nh.subscribe("harrier/runtime_status", 1, &DiagnosticsNode::diagnosticsReceiveHandler, this);
+    rosInterface.sub_pipelineStatus = nh.subscribe("pipeline/runtime_status", 1, &DiagnosticsNode::diagnosticsReceiveHandler, this);
+    rosInterface.sub_motionDetectorStatus = nh.subscribe("motion_tracker/runtime_status", 1, &DiagnosticsNode::diagnosticsReceiveHandler, this);
+    rosInterface.sub_motionTrackerStatus = nh.subscribe("yolo/runtime_status", 1, &DiagnosticsNode::diagnosticsReceiveHandler, this);
+    rosInterface.sub_captureStatus = nh.subscribe("capture/runtime_status", 1, &DiagnosticsNode::diagnosticsReceiveHandler, this);
+
+    rosInterface.pub_diagnosticData = nh.advertise<surveillance_system::diagnostic_event>("system/runtime_diagnostics", configuration.queueSize);
     return;
 }
 
@@ -74,7 +81,10 @@ void DiagnosticsNode::severityProcessingLoop() {
     ros::Rate loopRate(100);
     while(diagnosticsRunning && ros::ok()) {
         std::optional<surveillance_system::diagnostic_event> checkForSeverity = components.diagnosticSeverePriorityQueue.pop();
-        if(not checkForSeverity.has_value()) continue;
+        if(not checkForSeverity.has_value()) {
+            loopRate.sleep();
+            continue;
+        }
 
         publishDiagnosticsData(checkForSeverity.value());
 
@@ -86,7 +96,10 @@ void DiagnosticsNode::publishingLoop() {
     ros::Rate loopRate(100);
     while(diagnosticsRunning && ros::ok()) {
         std::optional<surveillance_system::diagnostic_event> checkForData = components.diagnosticEventQueue.pop();
-        if(not checkForData.has_value()) continue;
+        if(not checkForData.has_value()) {
+            loopRate.sleep();
+            continue;
+        }
         
         publishDiagnosticsData(checkForData.value());
     }
