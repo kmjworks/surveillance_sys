@@ -29,7 +29,7 @@ add_library(deepSort STATIC
 
 )
 
-target_include_directories(deepSort PRIVATE
+target_include_directories(deepSort PUBLIC
     "${DEEPSORT_INCL_PATH}"
     "${DEEPSORT_INCL_PATH}/utilities"
     ${OpenCV_INCLUDE_DIRS}
@@ -39,7 +39,7 @@ target_include_directories(deepSort PRIVATE
 )
 
 
-target_link_libraries(deepSort PRIVATE
+target_link_libraries(deepSort
     ${OpenCV_LIBRARIES}
     ${CUDA_LIBRARIES}
     Threads::Threads
@@ -49,4 +49,4 @@ target_link_libraries(deepSort PRIVATE
     nvonnxparser
 )
 
-target_compile_features(deepSort PRIVATE cxx_std_20)
+target_compile_features(deepSort PUBLIC cxx_std_20)

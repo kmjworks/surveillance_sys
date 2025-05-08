@@ -6,8 +6,7 @@
 #include "ros/node_handle.h"
 #include "image_transport/subscriber.h"
 
-#include <surveillance_system_common/ROS/EventLoopTimeKeeper.hpp>
-#include "surveillance_system_capture/components/captureNodeInternal.hpp"
+#include "components/captureNodeInternal.hpp"
 
 namespace capture {
     struct ROSInterface {

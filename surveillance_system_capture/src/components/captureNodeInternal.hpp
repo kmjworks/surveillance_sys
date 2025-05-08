@@ -5,7 +5,7 @@
 #include "opencv2/core/mat.hpp"
 #include "sensor_msgs/Image.h"
 
-#include <surveillance_system_common/ThreadSafeQueue/ThreadSafeQueue.hpp>
+#include <ThreadSafeQueue/ThreadSafeQueue.hpp>
 
 namespace capture_internal {
     struct StorageMetrics {

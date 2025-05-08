@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(surveillance_system_msgs)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD_REQUIRED 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs

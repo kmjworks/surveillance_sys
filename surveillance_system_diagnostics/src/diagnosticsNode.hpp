@@ -4,7 +4,7 @@
 #include <surveillance_system_msgs/diagnostic_event.h>
 #include "ros/node_handle.h"
 
-#include <surveillance_system_common/ThreadSafeQueue/ThreadSafeQueue.hpp>
+#include "ThreadSafeQueue.hpp"
 
 using DetectionEventCount = int64_t;
 using MotionEventCount = int64_t;

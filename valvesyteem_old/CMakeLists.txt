@@ -1,4 +1,4 @@
-project(surveillance_system VERSION 1.0.0 LANGUAGES CXX)
+project(surveillance_system_old VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)

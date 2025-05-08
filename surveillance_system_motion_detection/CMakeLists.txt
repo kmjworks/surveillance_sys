@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(surveillance_system_motion_detection)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD_REQUIRED 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -13,9 +17,13 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(OpenCV REQUIRED)
 find_package(CUDA REQUIRED)
 
-# Find TensorRT using custom FindTensorRT.cmake
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/../../valvesysteem)
-find_package(TensorRT REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt
+  GIT_TAG e69e5f977d458f2650bb346dadf2ad30c5320281) # 10.2.1
+FetchContent_MakeAvailable(fmt)
+
 
 catkin_package(
   LIBRARIES ${PROJECT_NAME}
@@ -37,8 +45,10 @@ cuda_add_library(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
-  ${TensorRT_LIBRARIES}
   ${CUDA_LIBRARIES}
+  nvinfer
+  nvinfer_plugin
+  nvonnxparser
 )
 
 add_executable(motion_detector_node src/main.cpp)
@@ -46,12 +56,17 @@ target_link_libraries(motion_detector_node
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
-  ${TensorRT_LIBRARIES}
+  nvinfer
+  nvinfer_plugin
+  nvonnxparser
   ${CUDA_LIBRARIES}
 )
+
+target_compile_features(motion_detector_node PUBLIC cxx_std_20)
 
 install(TARGETS ${PROJECT_NAME} motion_detector_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 )
+

@@ -14,7 +14,7 @@
 #include <string>
 #include <memory>
 
-#include <surveillance_system_common/ThreadSafeQueue/ThreadSafeQueue.hpp>
+#include <ThreadSafeQueue/ThreadSafeQueue.hpp>
 
 namespace pipeline {
     class HarrierCaptureSrc;
