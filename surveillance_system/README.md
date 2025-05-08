@@ -26,14 +26,11 @@ The surveillance system is divided into multiple ROS packages:
 ## Building
 
 ```bash
-# Create a catkin workspace
 mkdir -p ~/catkin_ws/src
 cd ~/catkin_ws/src
 
-# Clone the repository
 git clone https://your-git-server/surveillance_system.git .
 
-# Build the packages
 cd ~/catkin_ws
 catkin build
 ```
@@ -48,7 +45,7 @@ The system can be launched in different configurations:
 roslaunch surveillance_system system.launch
 ```
 
-### Simulation Mode
+### Simulation
 
 ```bash
 roslaunch surveillance_system simulation.launch
@@ -63,7 +60,7 @@ Configuration parameters are stored in YAML files in the `config` directory:
 
 ## Models
 
-The AI models are stored in the `models` directory:
+The DeepSORT CNN and YOLOv8 detection model are stored in the `models` directory:
 
 - `yolov8_finetuned_fp16.engine`: Detection model (TensorRT engine)
 - `deepsort.engine`: Tracking model (TensorRT engine)
