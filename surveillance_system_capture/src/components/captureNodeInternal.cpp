@@ -1,4 +1,4 @@
-#include "../include/surveillance_system_capture/components/captureNodeInternal.hpp"
+#include "captureNodeInternal.hpp"
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgcodecs.hpp>
 #include <boost/format.hpp>

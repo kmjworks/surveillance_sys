@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(surveillance_system_pipeline)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD_REQUIRED 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -44,6 +48,8 @@ target_link_libraries(pipeline_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
+
+target_compile_features(pipeline_node PUBLIC cxx_std_20)
 
 install(TARGETS ${PROJECT_NAME} pipeline_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

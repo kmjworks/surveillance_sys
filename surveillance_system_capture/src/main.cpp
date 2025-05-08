@@ -1,4 +1,4 @@
-#include "surveillance_system_capture/captureNode.hpp"
+#include "captureNode.hpp"
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "capture_node");

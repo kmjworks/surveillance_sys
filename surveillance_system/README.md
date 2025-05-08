@@ -65,13 +65,7 @@ The DeepSORT CNN and YOLOv8 detection model are stored in the `models` directory
 - `yolov8_finetuned_fp16.engine`: Detection model (TensorRT engine)
 - `deepsort.engine`: Tracking model (TensorRT engine)
 
-## Contributing
-
-1. Fork the repository
-2. Create a new branch
-3. Make your changes
-4. Submit a pull request
 
 ## License
 
-This project is licensed under the [insert license name] - see the LICENSE file for details.
+This project is licensed under the MIT license - see the LICENSE file for details.

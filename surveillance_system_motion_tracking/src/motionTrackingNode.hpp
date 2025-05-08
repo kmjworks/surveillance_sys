@@ -11,7 +11,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "components/motionTrackingInternal.hpp"
-#include <surveillance_system_common/DeepSORT/incl/utilities/dataTypes.hpp>
+#include <DeepSORT/incl/utilities/dataTypes.hpp>
 
 class MotionTrackingNode {
     public:

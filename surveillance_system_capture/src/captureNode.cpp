@@ -4,7 +4,8 @@
 #include <surveillance_system_msgs/storage_status.h>
 #include <surveillance_system_msgs/diagnostic_event.h>
 
-#include "surveillance_system_capture/captureNode.hpp"
+#include "ROS/EventLoopTimeKeeper.hpp"
+#include "captureNode.hpp"
 
 using namespace std::this_thread;
 using namespace std::chrono;
