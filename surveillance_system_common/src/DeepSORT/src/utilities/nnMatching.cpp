@@ -89,9 +89,9 @@ void
     }                           //add features;
 
     //erase the samples which not in active_targets;
-    for (auto i = samples.begin(); i != samples.end();) {
-        bool flag = false;
-      for (int j:active_targets) if (j == i->first) { flag = true; break; }
+    for (std::map < int, tracking::FEATURESS >::iterator i = samples.begin(); i != samples.end();) {
+        bool flag = false; 
+        for (int j:active_targets) if (j == i->first) { flag = true; break; }
         if (flag == false)samples.erase(i++);
         else i++;
     }

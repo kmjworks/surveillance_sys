@@ -1,5 +1,4 @@
 #include <utility>
-
 #include "../incl/DeepSORT.hpp"
 
 DeepSort::DeepSort(std::string modelPath, int batchSize, int featureDim, int gpuID, nvinfer1::ILogger* gLogger) : 
@@ -53,7 +52,7 @@ void DeepSort::sort(cv::Mat& frame, std::vector<DetectionBox>& dets) {
         b.trackIdentifier = (float)r.first;
         dets.push_back(b);
     }
-
+  
     for (int i = 0; i < results.size(); ++i) {
         CLSCONF c = results[i].first;
         dets[i].classIdentifier = c.cls;

@@ -2,6 +2,7 @@
 #include "gst/app/gstappsink.h"
 #include "ros/console.h"
 
+
 namespace pipeline {
     HarrierCaptureSrc::HarrierCaptureSrc(const std::string& devicePath, int frameRate, bool nightMode) 
         : devicePath(devicePath), isPipelineInitialized(false),
@@ -34,11 +35,29 @@ namespace pipeline {
     bool HarrierCaptureSrc::initPipeline() {
         std::string pipelineStringBuildUp = 
         "v4l2src device=" + devicePath + " ! "
-        "video/x-raw, format=YUY2, width=1920, height=1080, framerate=" + 
-        std::to_string(harrierState.frameRate) + "/1 ! "
-        "videoconvert ! video/x-raw, format=" + 
-        (harrierState.nightMode ? "GRAY8" : "BGR") + " ! "
-        "appsink name=sink";
+        "video/x-raw, format=YUY2, width=1920, height=1080, framerate=" + std::to_string(harrierState.frameRate) + "/1 ! "
+        "tee name=t ! "
+        "queue ! nvvideoconvert ! ";
+
+        harrierState.useCompression = true; harrierState.codecType = CodecType::H264;
+        harrierState.bitrate = 4000000;
+
+        if (harrierState.useCompression) {
+            if (harrierState.codecType == CodecType::H264) {
+                pipelineStringBuildUp += 
+                    "nvv4l2h264enc bitrate=" + std::to_string(harrierState.bitrate) + 
+                    " maxperf-enable=1 preset-level=4 ! h264parse ! ";
+            } else if (harrierState.codecType == CodecType::H265) {
+                pipelineStringBuildUp += 
+                    "nvv4l2h265enc bitrate=" + std::to_string(harrierState.bitrate) + 
+                    " maxperf-enable=1 preset-level=4 ! h265parse ! ";
+            }
+            pipelineStringBuildUp += "rtph264pay ! queue ! appsink name=compressed_sink ";
+        }
+
+        pipelineStringBuildUp += "t. ! queue ! videoconvert ! video/x-raw, format=";
+        pipelineStringBuildUp += (harrierState.nightMode ? "GRAY8" : "BGR");
+        pipelineStringBuildUp += " ! appsink name=sink";
 
         ROS_INFO_STREAM("Initializing pipeline - " << pipelineStringBuildUp);
         

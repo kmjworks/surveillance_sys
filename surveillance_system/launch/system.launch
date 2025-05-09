@@ -20,7 +20,7 @@
 
   <!-- Motion Detection Node -->
   <node pkg="surveillance_system_motion_detection" type="motion_detector_node" name="motion_detection_node" output="screen">
-    <param name="engine_file"            value="$(find surveillance_system)/models/yolov8_finetuned_fp16.engine"/>
+    <param name="engine_file"            value="$(find surveillance_system)/models/yolov8_finetuned_nx.engine"/>
     <param name="confidence_threshold"   value="0.45"/>
     <param name="enable_viz"             value="true"/>
   </node>

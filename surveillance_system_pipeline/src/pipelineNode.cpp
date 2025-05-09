@@ -28,8 +28,8 @@ PipelineNode::~PipelineNode() {
 bool PipelineNode::initializePipelineNode() {
 
     ROS_INFO("Initializing Pipeline Node...");
-    rosInterface.pub_motionEvents = imageTransport.advertise("pipeline/runtime_potentialMotionEvents", 10);
-    rosInterface.pub_processedFrames = imageTransport.advertise("pipeline/runtime_processedFrames", 10);
+    rosInterface.pub_motionEvents = imageTransport.advertise("pipeline/runtime_potentialMotionEvents", 1);
+    rosInterface.pub_processedFrames = imageTransport.advertise("pipeline/runtime_processedFrames", 1);
     rosInterface.pub_runtimeErrors = nh.advertise<std_msgs::String>("pipeline/runtime_errors", 10);
 
     components.cameraSrc = std::make_unique<pipeline::HarrierCaptureSrc>(params.devicePath, params.frameRate, params.nightMode);

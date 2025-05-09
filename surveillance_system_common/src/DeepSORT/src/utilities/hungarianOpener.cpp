@@ -16,7 +16,7 @@ Eigen::Matrix<float, -1, 2, Eigen::RowMajor> HungarianOper::Solve(const linearas
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
             int tmp = (int)matrix(row, col);
-            if (tmp == 0) pairs.emplace_back(row, col);
+            if (tmp == 0) pairs.push_back(std::make_pair(row, col));
         }
     }
 

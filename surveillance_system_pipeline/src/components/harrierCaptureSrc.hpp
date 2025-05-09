@@ -4,12 +4,28 @@
 #include <gst/gst.h>
 #include <string>
 #include <atomic>
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
+
+
 namespace pipeline {
+
+    enum class CodecType {
+        NONE = 0,
+        H264 = 1,
+        H265 = 2,
+        MJPEG = 3
+    };
     
     struct SrcState {
         int frameRate;
-        bool nightMode;
         int retryCount;
+        bool nightMode;
+        int bitrate; 
+        bool useCompression;
+        CodecType codecType;
+        
     };
 
     struct Elements {

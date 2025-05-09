@@ -35,5 +35,7 @@ class DeepSort {
         std::unique_ptr<Tracker> objTracker;
         std::unique_ptr<FeatureTensor> featureExtractor;
         nvinfer1::ILogger* gLogger;
+        std::mutex resultMutex;
+        
         int gpuID;
 };

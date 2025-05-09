@@ -36,6 +36,7 @@ class MotionTrackingNode : public VisualizationHandler {
         void loadParams();
         void initROSIO();
         void initComponents();
+        cv::Mat preprocessImage(cv::Mat& img, int inputWidth, int inputHeight);
 
         //void publishTrackingVisualization(cv::Mat& image, std::vector<DetectionBox>& boundingBoxes);
         void processTrackingVisualization(const cv::Mat& image, const std::vector<DetectionBox>& boundingBoxes, const ros::Time& timestamp) override;
