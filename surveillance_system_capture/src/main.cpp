@@ -5,7 +5,7 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
     ros::NodeHandle private_nh("~");
     
-    CaptureNode capture(nh, private_nh);
+    //CaptureNode capture(nh, private_nh);
         
     ros::spin();
     return 0;

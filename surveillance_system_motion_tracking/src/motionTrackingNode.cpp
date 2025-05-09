@@ -25,11 +25,10 @@ MotionTrackingNode::MotionTrackingNode(ros::NodeHandle& nh, ros::NodeHandle& pnh
 
 MotionTrackingNode::~MotionTrackingNode() {
     try {
-        ROS_INFO("[MotionTrackingNode] Shutting down...");
-        cudaDeviceSynchronize();
+        asyncPipeline.reset();
 
+        ROS_INFO("[MotionTrackingNode] Shutting down...");
         components.deepSort.reset();
-        cudaDeviceSynchronize();
 
         ROS_INFO("[MotionTrackingNode] Shutdown complete.");
     } catch (const std::exception& e) {
@@ -43,8 +42,8 @@ void MotionTrackingNode::loadParams() {
     pnh.param<int>("deepsort_feature_dim", configuration.deepSortConfiguration.featureDim, 256);
     pnh.param<int>("gpu_identifier", configuration.deepSortConfiguration.gpuIdentifier, 0);
 
-    pnh.param<int>("detector_input_width", configuration.detectorInputWidth, 640); // Match detector's input_w
-    pnh.param<int>("detector_input_height", configuration.detectorInputHeight, 640); // Match detector's input_h
+    pnh.param<int>("detector_input_width", configuration.detectorInputWidth, 640); 
+    pnh.param<int>("detector_input_height", configuration.detectorInputHeight, 640);
     pnh.param<int>("person_class_identifier", configuration.personClassIdentifier, 0);
     pnh.param<int>("queue_size", configuration.queueSize, 10);
     pnh.param<bool>("enable_tracking_viz", debugConfiguration.enableTrackingViz, false);
@@ -65,7 +64,11 @@ void MotionTrackingNode::initComponents() {
             configuration.deepSortConfiguration.gpuIdentifier,
             components.gLogger.get()
         );
-        ROS_INFO("[MotionTrackingNode] DeepSort instance initialized successfully.");
+       
+        asyncPipeline = std::make_unique<AsyncProcessingPipeline>(this);
+
+        ROS_INFO("[MotionTrackingNode] DeepSort & Async pipeline initialized successfully.");
+
     } catch (const std::exception& e) {
         ROS_FATAL("[MotionTrackingNode] Failed to initialize DeepSort instance: %s. Shutting down.", e.what());
         ros::shutdown();
@@ -80,7 +83,7 @@ void MotionTrackingNode::initROSIO() {
     pnh.param<std::string>("detection_topic", detectionTopic, "yolo/runtime_detections");
     pnh.param<std::string>("tracked_topic", trackedTopic, "motion_tracker/runtime_trackedObjects");    
     
-    rosInterface.pub_trackingObjectsViz = nh.advertise<sensor_msgs::Image>("motion_tracker/runtime_trackedObjectsViz", 1);
+    rosInterface.pub_trackingObjectsViz = nh.advertise<sensor_msgs::Image>("motion_tracker/runtime_trackedObjectsViz", 10);
     rosInterface.pub_trackedObjects = nh.advertise<vision_msgs::Detection2DArray>(trackedTopic, configuration.queueSize);
     rosInterface.sub_rawImages.subscribe(nh, imageTopic, configuration.queueSize);
     rosInterface.sub_detection.subscribe(nh, detectionTopic, configuration.queueSize);
@@ -178,7 +181,7 @@ void MotionTrackingNode::synchronizedCb(const sensor_msgs::ImageConstPtr& imageM
         try {
             components.deepSort->sort(imageCopy, currentDetectionBoxes);
             
-            publishTrackingVisualization(imageCopy, currentDetectionBoxes);
+            asyncPipeline->enqueueWork(imageCopy, currentDetectionBoxes, imageMsg->header.stamp);
 
         } catch (const std::exception& e) {
             ROS_ERROR_THROTTLE(5.0, "[MotionTrackingNode] Exception during DeepSORT sort: %s",
@@ -223,24 +226,32 @@ void MotionTrackingNode::synchronizedCb(const sensor_msgs::ImageConstPtr& imageM
     }
 }
 
-void MotionTrackingNode::publishTrackingVisualization(cv::Mat& image, std::vector<DetectionBox>& boundingBoxes) {
-    cv::Mat temp = image.clone();
-    for(auto box : boundingBoxes) {
-        cv::Point lt(box.x1, box.y1);
-        cv::Point br(box.x2, box.y2);
-        cv::rectangle(temp, lt, br, cv::Scalar(255, 0, 0), 1);
 
-        std::string label = cv::format("ID:%d_x:%f_y:%f", static_cast<int>(box.trackIdentifier), ((box.x1+box.x2) / 2), (box.y1+box.y2) / 2);
-        cv::putText(temp, label, lt, cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0,255,0));
+
+void MotionTrackingNode::processTrackingVisualization(const cv::Mat& image, const std::vector<DetectionBox>& boundingBoxes, const ros::Time& timestamp) {
+    ros::Time startTime = ros::Time::now();
+    cv::Mat visualizationImage = image.clone();
+    for(const auto& box : boundingBoxes) {
+        if (box.trackIdentifier >= 0) {
+            cv::Point lt(box.x1, box.y1);
+            cv::Point br(box.x2, box.y2);
+            cv::rectangle(visualizationImage, lt, br, cv::Scalar(0, 0, 255), 2);
+            
+            std::string label = cv::format("ID:%d_x:%f_y:%f", static_cast<int>(box.trackIdentifier), (box.x1 + box.x2) / 2, (box.y1 + box.y2) / 2);
+            cv::putText(visualizationImage, label, lt, cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 255, 0));
+        }
     }
 
-
-    try {
+    try{
         cv_bridge::CvImage trackingOutputViz;
         trackingOutputViz.encoding = sensor_msgs::image_encodings::BGR8;
-        trackingOutputViz.image = temp;
+        trackingOutputViz.image = visualizationImage;
+        trackingOutputViz.header.stamp = timestamp;
         rosInterface.pub_trackingObjectsViz.publish(trackingOutputViz.toImageMsg());
+        
+        ros::Duration elapsed = ros::Time::now() - startTime;
+        ROS_DEBUG("Total visualization processing time: %.4f s", elapsed.toSec());
     } catch (const cv_bridge::Exception& e) {
         ROS_WARN("[MotionTrackingNode] cv_bridge publishing error: %s", e.what());
     }
-}
+} 

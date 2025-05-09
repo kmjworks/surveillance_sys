@@ -46,7 +46,6 @@
   </node>
 
   <!-- Visualization (optional) -->
-  <node pkg="rviz" type="rviz" name="rviz"
-        args="-d $(find surveillance_system)/config/pipeline_config.rviz"/>
+  <node pkg="rviz" type="rviz" name="rviz" />
         
 </launch>

@@ -52,7 +52,7 @@ void Tracker::update(const model_internal::DETECTIONS &detections) {
         active_targets.push_back(track.track_id);
         tid_features.push_back(std::make_pair(track.track_id, track.features));
         tracking::FEATURESS t = tracking::FEATURESS(0, 256);
-        //track.features = t;
+        track.features = t;
     }
     this->metric->partialFit(tid_features, active_targets);
 }

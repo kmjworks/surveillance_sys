@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <string>
 #include <thread>
-#include <surveillance_system_msgs/diagnostic_event.h>
+#include "surveillance_system_msgs/diagnostic_event.h"
 #include "ros/node_handle.h"
 
 #include "ThreadSafeQueue.hpp"

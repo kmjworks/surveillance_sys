@@ -13,10 +13,19 @@ using namespace std::chrono;
 CaptureNode::CaptureNode(ros::NodeHandle& nh, ros::NodeHandle& pnh) : nh(nh), private_nh(pnh) {
     loadParameters();
     initROSIO();
-    initComponents();
+    //initComponents();
 
-    state.running = true;
+    internalInterface = std::make_unique<CaptureNodeInternal>(configuration.saveDirectoryPath, configuration.imageQueueSize, 
+        [this](const std::string& description, int severity, const std::vector<std::string>& values) {
+            this->diagnosticCallback(description, severity, values);
+        }
+    );
+
+    internalInterface->startInternal();
+    
+    
     state.periodicThread = std::thread(&CaptureNode::checkPeriodics, this);
+    state.running = true;
 
     ROS_INFO("[CaptureNode] Node initialized successfully");
 }
@@ -39,14 +48,9 @@ void CaptureNode::initROSIO() {
 
     rosInterface.pub_StorageData = nh.advertise<surveillance_system_msgs::storage_status>("capture/runtime_storageMetrics", 10);
     rosInterface.pub_StorageData = nh.advertise<surveillance_system_msgs::diagnostic_event>("capture/runtime_diagnostics", 10);
-
-    rosInterface.sub_detectedMotionVisualized = it.subscribe(
-        "pipeline/detection_visualization", 5,
-        &CaptureNode::detectionImageCallback, this
-    );
     
-    rosInterface.sub_trackedMotionVisualized = it.subscribe("pipeline/tracking_visualization", 5,&CaptureNode::trackingImageCallback, this);
-    rosInterface.sub_detectedMotionVisualized = it.subscribe("pipeline/tracking_visualization", 5,&CaptureNode::detectionImageCallback, this);
+    rosInterface.sub_trackedMotionVisualized = it.subscribe("motion_tracker/runtime_trackedObjects", 5,&CaptureNode::trackingImageCallback, this);
+    rosInterface.sub_detectedMotionVisualized = it.subscribe("yolo/runtime_detectionVisualizationDebug", 5,&CaptureNode::detectionImageCallback, this);
 }
 
 void CaptureNode::initComponents() {
@@ -71,7 +75,7 @@ void CaptureNode::diagnosticCallback(const std::string& description, int severit
     surveillance_system_msgs::diagnostic_event event; 
     event.event_description = description;
     event.event_severity = severity;
-    event.origin_node = nh.getNamespace();
+    event.origin_node = "capture_node";
 
     event.values.clear(); size_t i = 0;
 

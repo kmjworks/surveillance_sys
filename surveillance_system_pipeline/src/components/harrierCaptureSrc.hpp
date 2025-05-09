@@ -1,28 +1,43 @@
-#pragma once
+#pragma once 
 
-#include <opencv2/videoio.hpp>
+#include <opencv2/opencv.hpp>
+#include <gst/gst.h>
 #include <string>
-#include <mutex>
 #include <atomic>
-
 namespace pipeline {
     
+    struct SrcState {
+        int frameRate;
+        bool nightMode;
+        int retryCount;
+    };
+
+    struct Elements {
+        GstElement* pipeline;
+        GstElement* appsink;
+    };
+
     class HarrierCaptureSrc {
         public:
-            HarrierCaptureSrc(const std::string& devicePath);
+            HarrierCaptureSrc(const std::string& devicePath, int frameRate, bool nightMode);
             ~HarrierCaptureSrc();
 
-            bool isInitialized() const { return initialized; }
-            bool captureFrame(cv::Mat& outFrame);
-            bool reconnect();
+            bool initializeRawSrcForCapture();
+            bool captureFrameFromSrc(cv::Mat& frame);
+            void releasePipeline();
 
         private:
             std::string devicePath;
-            cv::VideoCapture cap;
-            std::mutex capMutex;
-            std::atomic<bool> initialized{false};
+            std::atomic<bool> isPipelineInitialized;
+            SrcState harrierState;
+            Elements pipelineElements;
 
-            bool openDevice();
-            bool configureDevice();
+            bool initPipeline();
+            bool initCameraSrc();
+
+            void cleanup();
+            bool retryOnFail();
+            bool isNightMode(GstSample *sample);
+
     };
 }

@@ -92,7 +92,7 @@ void DiagnosticsNode::severityProcessingLoop() {
 
 void DiagnosticsNode::publishingLoop() {
     ROS_INFO("[Diagnostics Node] Publishing thread started.");
-    ros::Rate loopRate(100);
+    ros::Rate loopRate(30);
     while(diagnosticsRunning && ros::ok()) {
         std::optional<surveillance_system_msgs::diagnostic_event> checkForData = components.diagnosticEventQueue.pop();
         if(not checkForData.has_value()) {

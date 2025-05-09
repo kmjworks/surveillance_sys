@@ -14,7 +14,7 @@
 #include <string>
 #include <memory>
 
-#include <ThreadSafeQueue/ThreadSafeQueue.hpp>
+#include "ThreadSafeQueue/ThreadSafeQueue.hpp"
 
 namespace pipeline {
     class HarrierCaptureSrc;
@@ -53,6 +53,9 @@ namespace pipeline {
         std::string devicePath;
         std::string outputPath;
     };
+
+    
+    
 }
 
 class PipelineNode {
@@ -64,7 +67,7 @@ class PipelineNode {
         /*
             loadParameters made public for unit testing
         */
-        static int loadParameters(ros::NodeHandle& nh_priv, pipeline::ConfigurationParameters& parametersToLoad); // hack
+        void loadParameters(ros::NodeHandle& nh_priv, pipeline::ConfigurationParameters& parametersToLoad); // hack
         void shutdown();
 
     private:
@@ -87,4 +90,5 @@ class PipelineNode {
         void processingLoop();
         void startWorkerThreads();
         void stopWorkerThreads();
+
 };
