@@ -1,32 +1,32 @@
 #pragma once
-
 #include <opencv2/opencv.hpp>
-#include <queue>
+#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudabgsegm.hpp>
+#include <mutex>
 
 namespace pipeline {
-
-    struct DetectionParameters {
-        int minAreaPx;        // Minimum area in pixels for a motion region to be considered
-        float downScale;      // Downscale factor for processing (0.5 = half resolution)
-        int historyLength;    // How many frames to keep in history for background subtraction
-    };
-
     class PipelineInitialDetectionLite {
-        public:
-            PipelineInitialDetectionLite(int minAreaPixels, float downscaleFactor, int history);
-            ~PipelineInitialDetectionLite();
+    public:
+        explicit PipelineInitialDetectionLite(int minAreaPx = 800,
+            float downScale = 0.5f,
+            int history = 120,
+            int detectInterval = 2);
 
-            bool detectMotion(const cv::Mat& frame, cv::Mat& outputMotionMask, cv::Mat& annotatedFrame);
-            
-        private:
-            cv::Ptr<cv::BackgroundSubtractorMOG2> bgSubtractor;
-            cv::Mat fgMask;
-            
-            DetectionParameters params;
-            bool initialized;
-            std::queue<cv::Mat> frameHistory;
+        bool detect(const cv::Mat& frame, std::vector<cv::Rect>& outRois);
 
-            void preprocessForDetection(const cv::Mat& input, cv::Mat& output);
-            void postprocessMask(cv::Mat& mask);
+    private:
+        cv::Mat convertGrayFaster(const cv::Mat& in);    
+        void toOriginalScale(std::vector<cv::Rect>& rois, double scale, int maxW, int maxH);
+        
+        int minArea;
+        float scale;
+        int frameInterval;
+        int frameCounter;
+
+        /* state */
+        cv::Ptr<cv::cuda::BackgroundSubtractorMOG2> bgsub;
+        cv::cuda::GpuMat gpuIn, gpuFg;
+
+        std::mutex mtx; 
     };
-}
+} // namespace pipeline

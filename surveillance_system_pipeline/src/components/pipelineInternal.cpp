@@ -2,53 +2,67 @@
 #include <ros/ros.h>
 
 namespace pipeline {
+    
+    PipelineInternal::PipelineInternal(int frameRate, bool nightMode) :
+        state{frameRate, nightMode} {}
 
-PipelineInternal::PipelineInternal(int frameRate, bool nightMode) {
-    state.frameRate = frameRate;
-    state.nightMode = nightMode;
-    ROS_INFO("[PipelineInternal] Initialized with frameRate=%d, nightMode=%s", 
-              frameRate, nightMode ? "true" : "false");
-}
 
-PipelineInternal::~PipelineInternal() {
-    ROS_INFO("[PipelineInternal] Shutting down");
-}
+    PipelineInternal::~PipelineInternal() {}
 
-cv::Mat PipelineInternal::processFrame(const cv::Mat& frame) {
-    if (frame.empty()) {
-        ROS_WARN_THROTTLE(5.0, "[PipelineInternal] Empty frame received");
-        return cv::Mat();
+    cv::Mat PipelineInternal::processFrame(const cv::Mat& frame) {
+
+        if(frame.empty()) {
+            return cv::Mat();
+        }
+
+        cv::Mat convertedFrame = convertFormat(frame);
+
+        return preprocessFrame(convertedFrame);
     }
 
-    cv::Mat processedFrame = preprocessFrame(frame);
-    return processedFrame;
-}
+    cv::Mat PipelineInternal::convertFormat(const cv::Mat& frame) {
+        cv::Mat convertedFrame;
 
-cv::Mat PipelineInternal::convertFormat(const cv::Mat& frame) {
-    if (frame.empty()) return cv::Mat();
-    
-    cv::Mat result;
-    if (frame.channels() == 1) {
-        cv::cvtColor(frame, result, cv::COLOR_GRAY2BGR);
-    } else if (frame.channels() == 3) {
-        result = frame.clone();
-    } else if (frame.channels() == 4) {
-        cv::cvtColor(frame, result, cv::COLOR_BGRA2BGR);
+        if ((state.nightMode && frame.channels() == 1) || 
+            (!state.nightMode && frame.channels() == 3 && frame.type() == CV_8UC3)) {
+
+            frame.copyTo(convertedFrame);
+            return convertedFrame;
+        }
+
+        if(state.nightMode && frame.channels() == 3) {
+            cv::cvtColor(frame, convertedFrame, cv::COLOR_BGR2GRAY);
+        } else if (!state.nightMode && frame.channels() == 1) {
+            cv::cvtColor(frame, convertedFrame, cv::COLOR_GRAY2BGR);
+        } else if (!state.nightMode && frame.channels() == 3 && frame.type() != CV_8UC3) {
+            frame.convertTo(convertedFrame, CV_8UC3);
+        } else {
+            frame.copyTo(convertedFrame);
+        }
+
+        return convertedFrame;
     }
-    
-    return result;
-}
 
-cv::Mat PipelineInternal::preprocessFrame(const cv::Mat& frame) {
-    cv::Mat result = convertFormat(frame);
-    
-    if (state.nightMode) {
-        // Apply night mode enhancements
-        cv::GaussianBlur(result, result, cv::Size(5, 5), 0);
-        cv::convertScaleAbs(result, result, 1.5, 10);
+    cv::Mat PipelineInternal::preprocessFrame(const cv::Mat& frame) {
+        cv::Mat resultingFrame;
+
+        if(frame.channels() == 1) {
+            cv::equalizeHist(frame, resultingFrame);
+        } else {
+            cv::Mat ycrcb;
+            cv::cvtColor(frame, ycrcb, cv::COLOR_BGR2YCrCb);
+
+            std::vector<cv::Mat> splitChannels;
+            cv::split(ycrcb, splitChannels);
+
+            cv::equalizeHist(splitChannels[0], splitChannels[0]);
+
+            cv::merge(splitChannels, ycrcb);
+
+            cv::cvtColor(ycrcb, resultingFrame, cv::COLOR_YCrCb2BGR);
+        }
+
+        return resultingFrame;
     }
-    
-    return result;
-}
 
-} // namespace pipeline
+}

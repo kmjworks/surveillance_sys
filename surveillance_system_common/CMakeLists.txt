@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(CUDA REQUIRED)
-find_package(OpenCV 4.10.0 REQUIRED COMPONENTS core dnn imgproc cudaimgproc cudabgsegm)
+find_package(OpenCV 4.6.0 REQUIRED COMPONENTS core dnn imgproc cudaimgproc cudabgsegm)
 find_package(Threads REQUIRED)
 find_package(Eigen3 REQUIRED)
 

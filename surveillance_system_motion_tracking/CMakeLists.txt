@@ -43,6 +43,7 @@ include_directories(
 
 cuda_add_library(${PROJECT_NAME}
   src/motionTrackingNode.cpp
+  src/components/asyncTracking.hpp
   #src/components/FeatureExtractor.cpp
 )
 

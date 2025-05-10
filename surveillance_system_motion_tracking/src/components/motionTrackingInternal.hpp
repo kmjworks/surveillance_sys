@@ -10,7 +10,7 @@
 namespace motion_tracking {
 
     struct DeepSortConfig {
-        int batchSize = 128;
+        int batchSize = 32;
         int featureDim = 256;
         int gpuIdentifier = 0;
     };
