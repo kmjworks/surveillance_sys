@@ -3,6 +3,7 @@
 #include "components/pipelineInitialDetectionLite.hpp"
 #include "components/pipelineInternal.hpp"
 
+
 // #include "surveillance_system/motion_detection_events_array.h"
 //  #include "surveillance_system/motion_event.h"
 // #include <sensor_msgs/RegionOfInterest.h>
@@ -35,6 +36,7 @@ bool PipelineNode::initializePipelineNode() {
     components.cameraSrc = std::make_unique<pipeline::HarrierCaptureSrc>(params.devicePath, params.frameRate, params.nightMode);
     components.pipelineInternal = std::make_unique<pipeline::PipelineInternal>(params.frameRate, params.nightMode);
     components.pipelineIntegratedMotionDetection = std::make_unique<pipeline::PipelineInitialDetectionLite>(params.motionMinAreaPx, params.motionDownScale, params.motionHistory, params.motionSamplingRate);
+    components.cudaPreprocessor = std::make_unique<cuda_components::CUDAPreprocessor>(1920, 1080, 10);
     components.rawFrameQueue.initialize(params.bufferSize);
 
     if (!components.cameraSrc->initializeRawSrcForCapture()) {
@@ -129,20 +131,21 @@ void PipelineNode::captureLoop() {
     ROS_INFO("[PipelineNode - Capture Thread] Thread started.");
     cv::Mat rawFrame;
     ros::Rate loopRate(params.frameRate > 0 ? params.frameRate : 30);
+    cv::cuda::HostMem pinnedMem(1920, 1080, CV_8UC3, cv::cuda::HostMem::PAGE_LOCKED);
 
     while (pipelineRunning && ros::ok()) {
         ros::Time captureTimestamp = ros::Time::now();
-        bool captureStatus = components.cameraSrc->captureFrameFromSrc(rawFrame);
+        cv::Mat hostFrame = pinnedMem.createMatHeader();
+        bool captureStatus = components.cameraSrc->captureFrameFromSrc(hostFrame);
 
         if (!pipelineRunning)
             break;
 
-        if (captureStatus) {
-            if (!rawFrame.empty()) {
-                pipeline::FrameData data{rawFrame.clone(), captureTimestamp};
+        if (captureStatus && !hostFrame.empty()) {
+                pipeline::FrameData data{hostFrame, captureTimestamp};
                 if (!components.rawFrameQueue.try_push(std::move(data))) {
-                    ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Raw frame queue full, dropping frame.");
-                }
+                ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Raw frame queue full, dropping frame.");
+                
             } else {
                 ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Captured empty frame.");
             }
@@ -156,9 +159,11 @@ void PipelineNode::captureLoop() {
 
 void PipelineNode::processingLoop() {
     ROS_INFO("[PipelineNode - Processing Thread] Thread started.");
-    cv::Mat processedFrame;
-    cv::Mat frameForMotionDetection;
     std::vector<cv::Rect> motionRects;
+    cv::cuda::GpuMat gpuRawFrame;         
+    cv::cuda::GpuMat gpuProcessedFrame;  
+    cv::cuda::GpuMat gpuMotionFrame;
+
     bool motionPresence = false;
 
     while(pipelineRunning && ros::ok()) {
@@ -177,15 +182,25 @@ void PipelineNode::processingLoop() {
             continue;
         }
 
-        // publishRawFrame(data.frame, data.timestamp); // Debug
-        // publishMotionEventFrame(data.frame, data.timestamp);
-        processedFrame = components.pipelineInternal->processFrame(data.frame);
-        if(processedFrame.empty()) ROS_WARN("[PipelineNode - Processing Thread] Frame processing resulted in empty frame.");
+        try {
+
+            gpuRawFrame = components.cudaPreprocessor->upload(data.frame);
+            gpuProcessedFrame = components.cudaPreprocessor->process(gpuRawFrame, 1920, 1080, params.nightMode, false);
+
+            int motionWidth = static_cast<int>(1920 * params.motionDownScale);
+            int motionHeight = static_cast<int>(1080 * params.motionDownScale);
+
+            gpuMotionFrame = components.cudaPreprocessor->processGrayscale(gpuRawFrame, motionWidth, motionHeight, true);
+            cv::Mat cpuMotionFrame = components.cudaPreprocessor->download(gpuMotionFrame);
+            motionPresence = components.pipelineIntegratedMotionDetection->detect(cpuMotionFrame, motionRects);
+
+        } catch (const std::exception& e) {
+            publishError("CUDA processing error: " + std::string(e.what()));
+        }
         
-        motionPresence = components.pipelineIntegratedMotionDetection->detect(processedFrame, motionRects);
+        cv::Mat detectedFrame = components.cudaPreprocessor->download(gpuProcessedFrame);
         
-        
-        publishMotionEventFrame(data.frame, data.timestamp);
+        publishMotionEventFrame(detectedFrame, data.timestamp);
         
     }
 }
