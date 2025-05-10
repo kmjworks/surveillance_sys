@@ -115,6 +115,11 @@ namespace cuda_components {
             output = colorPool->acquire();
         }
 
+        if (output.cols != targetWidth || output.rows != targetHeight) {
+            int type = grayscale ? CV_8UC1 : CV_8UC3;
+            output.create(targetHeight, targetWidth, type);
+        }
+
         dim3 blockDim(16, 16);
         dim3 gridDim((targetWidth + blockDim.x - 1) / blockDim.x, (targetHeight + blockDim.y - 1) / blockDim.y);
 
@@ -126,6 +131,7 @@ namespace cuda_components {
         );
         cudaError_t err = cudaGetLastError();
         if(err != cudaSuccess) throw std::runtime_error("CUDA kernel err: " + std::string(cudaGetErrorString(err)));
+        cudaDeviceSynchronize();
 
         return output;
     }

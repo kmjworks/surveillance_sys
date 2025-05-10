@@ -69,7 +69,7 @@ void PipelineNode::loadParameters(ros::NodeHandle& nh_priv, pipeline::Configurat
     return;
 }
 
-void PipelineNode::publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp) {
+void PipelineNode::publishRawFrame(const  cv::Mat& frame, const ros::Time& timestamp) {
     try {
         cv_bridge::CvImage cvImage;
         cvImage.encoding = (frame.channels() == 1 ? sensor_msgs::image_encodings::MONO8 : sensor_msgs::image_encodings::BGR8);
@@ -85,11 +85,13 @@ void PipelineNode::publishRawFrame(const cv::Mat& frame, const ros::Time& timest
     }
 }
 
-void PipelineNode::publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp) {
+void PipelineNode::publishMotionEventFrame(const cv::cuda::GpuMat& frame, const ros::Time& timestamp) {
     try {
+        cv::Mat pubFrame;
+        frame.download(pubFrame);
         cv_bridge::CvImage img;
         img.encoding = (frame.channels() == 1 ? sensor_msgs::image_encodings::MONO8 : sensor_msgs::image_encodings::BGR8);
-        img.image = frame;
+        img.image = pubFrame;
         img.header.stamp = timestamp;
         img.header.frame_id = "camera_link_motion";
 
@@ -129,30 +131,25 @@ void PipelineNode::stopWorkerThreads() {
 
 void PipelineNode::captureLoop() {
     ROS_INFO("[PipelineNode - Capture Thread] Thread started.");
-    cv::Mat rawFrame;
     ros::Rate loopRate(params.frameRate > 0 ? params.frameRate : 30);
     cv::cuda::HostMem pinnedMem(1920, 1080, CV_8UC3, cv::cuda::HostMem::PAGE_LOCKED);
 
     while (pipelineRunning && ros::ok()) {
         ros::Time captureTimestamp = ros::Time::now();
+
         cv::Mat hostFrame = pinnedMem.createMatHeader();
-        bool captureStatus = components.cameraSrc->captureFrameFromSrc(hostFrame);
+        bool capture = components.cameraSrc->captureFrameFromSrc(hostFrame);
 
-        if (!pipelineRunning)
-            break;
-
-        if (captureStatus && !hostFrame.empty()) {
-                pipeline::FrameData data{hostFrame, captureTimestamp};
-                if (!components.rawFrameQueue.try_push(std::move(data))) {
-                ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Raw frame queue full, dropping frame.");
-                
-            } else {
-                ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Captured empty frame.");
+        if(capture && !hostFrame.empty()) {
+            pipeline::FrameData data{hostFrame.clone(), captureTimestamp};
+            if(not components.rawFrameQueue.try_push(std::move(data))) {
+                ROS_WARN_THROTTLE(1.0, "Queue full, dropping frame");
             }
-        } else {
-            publishError("[PipelineNode - Capture Thread] Frame capture failed.");
         }
+
+        loopRate.sleep();
     }
+
     ROS_INFO("[PipelineNode - Capture Thread] Exiting.");
 }
 
@@ -160,47 +157,31 @@ void PipelineNode::captureLoop() {
 void PipelineNode::processingLoop() {
     ROS_INFO("[PipelineNode - Processing Thread] Thread started.");
     std::vector<cv::Rect> motionRects;
-    cv::cuda::GpuMat gpuRawFrame;         
-    cv::cuda::GpuMat gpuProcessedFrame;  
+    cv::cuda::GpuMat gpuFrame;
     cv::cuda::GpuMat gpuMotionFrame;
 
     bool motionPresence = false;
 
     while(pipelineRunning && ros::ok()) {
         std::optional<pipeline::FrameData> dataOpt = components.rawFrameQueue.pop();
-
-        if(!dataOpt.has_value()) {
-            ROS_WARN("[PipelineNode - Processing Thread] Queue pop returned nullopt unexpectedly.");
-            break;
-        }
-
-        if(!pipelineRunning) break;
+        if(!dataOpt.has_value() || !pipelineRunning) break;
 
         pipeline::FrameData data = std::move(dataOpt.value());
-        if(data.frame.empty()) {
-            ROS_WARN("[PipelineNode - Processing Thread] Received empty frame from queue.");
-            continue;
-        }
+        if(data.frame.empty()) continue;
 
         try {
 
-            gpuRawFrame = components.cudaPreprocessor->upload(data.frame);
-            gpuProcessedFrame = components.cudaPreprocessor->process(gpuRawFrame, 1920, 1080, params.nightMode, false);
+            gpuFrame.upload(data.frame);
 
             int motionWidth = static_cast<int>(1920 * params.motionDownScale);
             int motionHeight = static_cast<int>(1080 * params.motionDownScale);
-
-            gpuMotionFrame = components.cudaPreprocessor->processGrayscale(gpuRawFrame, motionWidth, motionHeight, true);
-            cv::Mat cpuMotionFrame = components.cudaPreprocessor->download(gpuMotionFrame);
-            motionPresence = components.pipelineIntegratedMotionDetection->detect(cpuMotionFrame, motionRects);
+            gpuMotionFrame = components.cudaPreprocessor->process(gpuFrame, motionWidth, motionHeight, true, true);
+            
+            publishMotionEventFrame(gpuFrame, data.timestamp);                
 
         } catch (const std::exception& e) {
             publishError("CUDA processing error: " + std::string(e.what()));
         }
-        
-        cv::Mat detectedFrame = components.cudaPreprocessor->download(gpuProcessedFrame);
-        
-        publishMotionEventFrame(detectedFrame, data.timestamp);
         
     }
 }

@@ -36,29 +36,14 @@ void PipelineInitialDetectionLite::toOriginalScale(std::vector<cv::Rect>& rois, 
     }
 }
 
-bool PipelineInitialDetectionLite::detect(const cv::Mat& frame, std::vector<cv::Rect>& outRois) {
-    if (frame.empty())
-        return false;
+bool PipelineInitialDetectionLite::detect(const cv::cuda::GpuMat& preprocGpuFrame, std::vector<cv::Rect>& outRois) {
+    if (preprocGpuFrame.empty()) return false;
 
-    /* down‑scale & grayscale (CPU processed) */
-    cv::Mat smallScale;
-    cv::resize(convertGrayFaster(frame), smallScale, cv::Size(), scale, scale, cv::INTER_LINEAR);
+    bgsub->apply(preprocGpuFrame, gpuFg);
 
-    /* only process every Nth frame */
-    if (++frameCounter % frameInterval != 0)
-        return false;
-
-    /* upload to GPU (zero‑copy on Jetson if CV_8UC1) */
-    gpuIn.upload(smallScale);
-
-    /* background subtraction -> foreground mask */
-    bgsub->apply(gpuIn, gpuFg);
-
-    /* morphology op - closing to connect blobs (GPU processed) */
     static cv::Ptr<cv::cuda::Filter> morph = cv::cuda::createMorphologyFilter(cv::MORPH_CLOSE, gpuFg.type(), cv::Mat::ones(3, 3, CV_8U));
     morph->apply(gpuFg, gpuFg);
 
-    /* download mask & find contours (CPU processed) */
     cv::Mat fgCpu;
     gpuFg.download(fgCpu);
 
@@ -72,10 +57,7 @@ bool PipelineInitialDetectionLite::detect(const cv::Mat& frame, std::vector<cv::
             continue;
         outRois.emplace_back(cv::boundingRect(c));
     }
-
-    if (!outRois.empty())
-        toOriginalScale(outRois, scale, frame.cols, frame.rows);
-
+    
     return !outRois.empty();
 }
 

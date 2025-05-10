@@ -85,7 +85,7 @@ class PipelineNode {
         std::thread processingThread;
         std::atomic<bool> pipelineRunning;
         
-        void publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp);
+        void publishMotionEventFrame(const cv::cuda::GpuMat& frame, const ros::Time& timestamp);
         void publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishError(const std::string& errorMsg);
         void captureLoop();
