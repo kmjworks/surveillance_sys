@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(surveillance_system_motion_detection)
+project(surveillance_system_motion_detection_old)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED 20)
@@ -51,8 +51,8 @@ target_link_libraries(${PROJECT_NAME}
   nvonnxparser
 )
 
-add_executable(motion_detector_node src/main.cpp)
-target_link_libraries(motion_detector_node
+add_executable(motion_detector_node_old src/main.cpp)
+target_link_libraries(motion_detector_node_old
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
@@ -62,9 +62,9 @@ target_link_libraries(motion_detector_node
   ${CUDA_LIBRARIES}
 )
 
-target_compile_features(motion_detector_node PUBLIC cxx_std_20)
+target_compile_features(motion_detector_node_old PUBLIC cxx_std_20)
 
-install(TARGETS ${PROJECT_NAME} motion_detector_node
+install(TARGETS ${PROJECT_NAME} motion_detector_node_old
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}

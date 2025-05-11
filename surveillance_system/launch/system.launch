@@ -7,22 +7,15 @@
     <param name="frame_rate" value="30"/>
   </node>
 
-  <!-- Video Pipeline Node -->
-  <node pkg="surveillance_system_pipeline" type="pipeline_node" name="pipeline_node" output="screen">
-    <param name="device_path"            value="/dev/video0"/>
-    <param name="frame_rate"             value="30"/>  
-    <param name="night_mode"             value="false"/>
-    <param name="show_debug_frames"      value="true"/>
-    <param name="motion_sampling_rate"   value="1"/>
-    <param name="buffer_size"            value="100"/>
-    <param name="output_path"            value="$(env HOME)/surveillance_recordings"/>
-  </node>
-
-  <!-- Motion Detection Node -->
-  <node pkg="surveillance_system_motion_detection" type="motion_detector_node" name="motion_detection_node" output="screen">
-    <param name="engine_file"            value="$(find surveillance_system)/models/yolov8_finetuned_nx.engine"/>
-    <param name="confidence_threshold"   value="0.45"/>
-    <param name="enable_viz"             value="true"/>
+  <node pkg="surveillance_system_detection_deepstream" type="motion_detector_node" name="motion_detector_node" output="screen">
+    <param name="config_file" value="$(find surveillance_system)/dsconfig/deepstream_app_config.txt"/>
+    <param name="confidence_threshold" value="0.25"/>
+    <param name="enable_visualization" value="true"/>
+    <param name="frame_id" value="camera_link"/>
+    <param name="input_width" value="1920"/>
+    <param name="input_height" value="1080"/>
+    <param name="model_width" value="640"/>
+    <param name="model_height" value="640"/>
   </node>
 
   <!-- Motion Tracking Node -->

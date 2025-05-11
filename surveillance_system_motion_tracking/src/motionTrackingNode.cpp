@@ -108,9 +108,7 @@ void MotionTrackingNode::synchronizedCb(
 
     cv::Mat imageConv;
     try {
-      imageConv =
-          cv_bridge::toCvShare(imageMsg, sensor_msgs::image_encodings::BGR8)
-              ->image;
+      imageConv = cv_bridge::toCvShare(imageMsg, sensor_msgs::image_encodings::BGR8)->image;
     } catch (const cv_bridge::Exception &e) {
       ROS_ERROR("[MotionTrackingNode] cv_bridge exception: %s", e.what());
       return;
@@ -133,8 +131,8 @@ void MotionTrackingNode::synchronizedCb(
       return;
     }
 
-    const float scaleX = static_cast<float>(imageConv.cols) / detectorWidth;
-    const float scaleY = static_cast<float>(imageConv.rows) / detectorHeight;
+    //const float scaleX = static_cast<float>(imageConv.cols) / detectorWidth;
+    //const float scaleY = static_cast<float>(imageConv.rows) / detectorHeight;
 
     for (const auto &det : detections->detections) {
       if (det.results.empty())
@@ -150,15 +148,15 @@ void MotionTrackingNode::synchronizedCb(
         if (w_det <= 0 || h_det <= 0)
           continue;
 
-        float cx_orig = cx_det * scaleX;
-        float cy_orig = cy_det * scaleY;
-        float w_orig = w_det * scaleX;
-        float h_orig = h_det * scaleY;
+        //float cx_orig = cx_det * scaleX;
+        //float cy_orig = cy_det * scaleY;
+        //float w_orig = w_det * scaleX;
+        //float h_orig = h_det * scaleY;
 
-        float x1 = cx_orig - w_orig / 2.0f;
-        float y1 = cy_orig - h_orig / 2.0f;
-        float x2 = cx_orig + w_orig / 2.0f;
-        float y2 = cy_orig + h_orig / 2.0f;
+        float x1 = det.bbox.center.x - det.bbox.size_x / 2.0f;
+        float y1 = det.bbox.center.y - det.bbox.size_y / 2.0f;
+        float x2 = x1 + det.bbox.size_x;
+        float y2 = y1 + det.bbox.size_y;
 
         x1 = std::max(0.0f, std::min(x1, (float)imageConv.cols - 1.0f));
         y1 = std::max(0.0f, std::min(y1, (float)imageConv.rows - 1.0f));
@@ -189,8 +187,8 @@ void MotionTrackingNode::synchronizedCb(
     cv::Mat imageCopy = imageConv.clone();
 
     try {
-      components.deepSort->sort(imageCopy, currentDetectionBoxes);
 
+      components.deepSort->sort(imageCopy, currentDetectionBoxes);
       asyncPipeline->enqueueWork(imageCopy, currentDetectionBoxes, imageMsg->header.stamp);
 
     } catch (const std::exception &e) {

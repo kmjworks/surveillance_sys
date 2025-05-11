@@ -90,7 +90,6 @@ namespace cuda_components {
                         float spatialDist = dx*dx+dy*dy;
                         float colorDist = (neigh - pixel) * (neigh - pixel);
 
-
                         float spatialWeight = exp(-spatialDist) / (2.0f*powf(spatialSigma, 2));
                         float colorWeight = exp(-colorDist / (2.0f * colorSigma * colorSigma));
                         float weight = spatialWeight * colorWeight;
