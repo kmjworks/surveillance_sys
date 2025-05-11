@@ -33,31 +33,28 @@ namespace pipeline {
     }
 
     bool HarrierCaptureSrc::initPipeline() {
-        std::string pipelineStringBuildUp = 
+        std::string pipelineStringBuildUp =
         "v4l2src device=" + devicePath + " ! "
-        "video/x-raw, format=YUY2, width=1920, height=1080, framerate=" + std::to_string(harrierState.frameRate) + "/1 ! "
-        "tee name=t ! "
-        "queue ! nvvideoconvert ! ";
+        "video/x-raw,format=YUY2,width=1920,height=1080,framerate=" + std::to_string(harrierState.frameRate) + "/1 ! "
+        "tee name=t ";
 
         harrierState.useCompression = true; harrierState.codecType = CodecType::H264;
         harrierState.bitrate = 4000000;
 
         if (harrierState.useCompression) {
+            pipelineStringBuildUp += "t. ! queue ! nvvideoconvert ! video/x-raw(memory:NVMM),format=NV12 ! ";
             if (harrierState.codecType == CodecType::H264) {
-                pipelineStringBuildUp += 
-                    "nvv4l2h264enc bitrate=" + std::to_string(harrierState.bitrate) + 
-                    " maxperf-enable=1 preset-level=4 ! h264parse ! ";
-            } else if (harrierState.codecType == CodecType::H265) {
-                pipelineStringBuildUp += 
-                    "nvv4l2h265enc bitrate=" + std::to_string(harrierState.bitrate) + 
-                    " maxperf-enable=1 preset-level=4 ! h265parse ! ";
+                pipelineStringBuildUp += "nvv4l2h264enc bitrate=" + std::to_string(harrierState.bitrate) +
+                                         " maxperf-enable=1 preset-level=4 " +
+                                         "! h264parse ! rtph264pay ! queue ! appsink name=compressed_sink ";
             }
-            pipelineStringBuildUp += "rtph264pay ! queue ! appsink name=compressed_sink ";
         }
 
-        pipelineStringBuildUp += "t. ! queue ! videoconvert ! video/x-raw, format=";
-        pipelineStringBuildUp += (harrierState.nightMode ? "GRAY8" : "BGR");
-        pipelineStringBuildUp += " ! appsink name=sink";
+        std::string raw_output = "NV12";
+        pipelineStringBuildUp += "t. ! queue ! nvvideoconvert ! video/x-raw,format=" + raw_output;
+        pipelineStringBuildUp += " ! appsink name=sink caps=\"video/x-raw,format=" + raw_output + 
+                         ",width=1920,height=1080" + "\"";
+
 
         ROS_INFO_STREAM("Initializing pipeline - " << pipelineStringBuildUp);
         
@@ -80,6 +77,12 @@ namespace pipeline {
 
         gst_app_sink_set_drop(GST_APP_SINK(pipelineElements.appsink), true);
         gst_app_sink_set_max_buffers(GST_APP_SINK(pipelineElements.appsink), 1);
+
+        if(harrierState.useCompression) {
+            GstElement* compressed_sink = gst_bin_get_by_name(GST_BIN(pipelineElements.pipeline), "compressed_sink");
+            if(compressed_sink) gst_object_unref(compressed_sink); // not using nor storing it for now
+        }
+
 
         GstStateChangeReturn ret = gst_element_set_state(pipelineElements.pipeline, GST_STATE_PLAYING);
 
@@ -134,14 +137,6 @@ namespace pipeline {
             return false;
         }
 
-        int width, height;
-        
-        if (!gst_structure_get_int(structure, "width", &width) ||
-            !gst_structure_get_int(structure, "height", &height)) {
-                gst_sample_unref(sample);
-                return false;
-        }
-
         bool currentMode = (harrierState.nightMode or isNightMode(sample));
 
         GstMapInfo map;
@@ -150,9 +145,21 @@ namespace pipeline {
             return false;
         }
 
-        cv::Mat tmp(height, width, currentMode ? CV_8UC1 : CV_8UC3, (void*)map.data);
-        tmp.copyTo(frame);
+        int width, height;
+        gst_structure_get_int(structure, "width", &width);
+        gst_structure_get_int(structure, "height", &height);
 
+        const gchar* format = gst_structure_get_string(structure, "format");
+        if (format && g_strcmp0(format, "NV12") == 0) {
+            cv::Mat nv12_mat(height * 3 / 2, width, CV_8UC1, (void*)map.data);
+            nv12_mat.copyTo(frame);
+        } else {
+            ROS_ERROR_STREAM_THROTTLE(1.0, "Unexpected format from GStreamer: " << (format ? format : "Unknown") << ". Expected NV12.");
+            gst_buffer_unmap(buffer, &map);
+            gst_sample_unref(sample);
+            return false;
+        }
+        
         gst_buffer_unmap(buffer, &map);
         gst_sample_unref(sample);
 

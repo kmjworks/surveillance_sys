@@ -39,6 +39,11 @@ namespace pipeline {
         std::unique_ptr<PipelineInitialDetectionLite> pipelineIntegratedMotionDetection;
         std::unique_ptr<cuda_components::CUDAPreprocessor> cudaPreprocessor;
         ThreadSafeQueue<FrameData> rawFrameQueue;
+
+        cv::cuda::Stream stream;
+        cv::cuda::GpuMat gpuFrameBuffer[2];
+        std::vector<cv::cuda::HostMem> hostFramePool;
+        int bufferIdx = 0;
     };
 
     struct ConfigurationParameters {
@@ -85,7 +90,7 @@ class PipelineNode {
         std::thread processingThread;
         std::atomic<bool> pipelineRunning;
         
-        void publishMotionEventFrame(const cv::cuda::GpuMat& frame, const ros::Time& timestamp);
+        void publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp);
         void publishError(const std::string& errorMsg);
         void captureLoop();

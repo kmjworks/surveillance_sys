@@ -39,6 +39,25 @@ bool PipelineNode::initializePipelineNode() {
     components.cudaPreprocessor = std::make_unique<cuda_components::CUDAPreprocessor>(1920, 1080, 10);
     components.rawFrameQueue.initialize(params.bufferSize);
 
+    int frameW = 1920;
+    int frameYH = 1080;
+    int nv12BufH = frameYH * 3 / 2;
+    int matNV12Comp = CV_8UC1;
+    int poolSize = 3;
+
+    try {
+        
+        components.hostFramePool.reserve(poolSize);
+        for (int i = 0; i < poolSize; ++i) {
+            components.hostFramePool.emplace_back(nv12BufH, frameW, matNV12Comp, cv::cuda::HostMem::PAGE_LOCKED);
+        }
+    } catch (const cv::Exception& e) {
+        publishError("OpenCV Exception during pinned memory allocation: " + std::string(e.what()));
+        ROS_ERROR("OpenCV Exception during pinned memory allocation: %s", e.what());
+        return false;
+    }
+
+
     if (!components.cameraSrc->initializeRawSrcForCapture()) {
         publishError("Failed to initialize camera after multiple attempts.");
         ROS_ERROR("Failed to initialize camera source.");
@@ -85,13 +104,11 @@ void PipelineNode::publishRawFrame(const  cv::Mat& frame, const ros::Time& times
     }
 }
 
-void PipelineNode::publishMotionEventFrame(const cv::cuda::GpuMat& frame, const ros::Time& timestamp) {
+void PipelineNode::publishMotionEventFrame(const cv::Mat& frame, const ros::Time& timestamp) {
     try {
-        cv::Mat pubFrame;
-        frame.download(pubFrame);
         cv_bridge::CvImage img;
         img.encoding = (frame.channels() == 1 ? sensor_msgs::image_encodings::MONO8 : sensor_msgs::image_encodings::BGR8);
-        img.image = pubFrame;
+        img.image = frame;
         img.header.stamp = timestamp;
         img.header.frame_id = "camera_link_motion";
 
@@ -132,16 +149,18 @@ void PipelineNode::stopWorkerThreads() {
 void PipelineNode::captureLoop() {
     ROS_INFO("[PipelineNode - Capture Thread] Thread started.");
     ros::Rate loopRate(params.frameRate > 0 ? params.frameRate : 30);
-    cv::cuda::HostMem pinnedMem(1920, 1080, CV_8UC3, cv::cuda::HostMem::PAGE_LOCKED);
+
 
     while (pipelineRunning && ros::ok()) {
         ros::Time captureTimestamp = ros::Time::now();
+        cv::Mat frame = components.hostFramePool[components.bufferIdx].createMatHeader();
 
-        cv::Mat hostFrame = pinnedMem.createMatHeader();
-        bool capture = components.cameraSrc->captureFrameFromSrc(hostFrame);
+        bool capture = components.cameraSrc->captureFrameFromSrc(frame);
 
-        if(capture && !hostFrame.empty()) {
-            pipeline::FrameData data{hostFrame.clone(), captureTimestamp};
+        if(capture && !frame.empty()) {
+            pipeline::FrameData data; 
+            frame.copyTo(data.frame); data.timestamp = captureTimestamp;
+            components.bufferIdx = (components.bufferIdx + 1) % components.hostFramePool.size();
             if(not components.rawFrameQueue.try_push(std::move(data))) {
                 ROS_WARN_THROTTLE(1.0, "Queue full, dropping frame");
             }
@@ -156,34 +175,34 @@ void PipelineNode::captureLoop() {
 
 void PipelineNode::processingLoop() {
     ROS_INFO("[PipelineNode - Processing Thread] Thread started.");
-    std::vector<cv::Rect> motionRects;
-    cv::cuda::GpuMat gpuFrame;
-    cv::cuda::GpuMat gpuMotionFrame;
-
-    bool motionPresence = false;
 
     while(pipelineRunning && ros::ok()) {
         std::optional<pipeline::FrameData> dataOpt = components.rawFrameQueue.pop();
-        if(!dataOpt.has_value() || !pipelineRunning) break;
+        if (!pipelineRunning && (!dataOpt.has_value() || dataOpt->frame.empty())) break;
+        
+        if (dataOpt->frame.type() != CV_8UC1) {
+            ROS_ERROR_STREAM_THROTTLE(1.0, "[PipelineNode - Processing Thread] Invalid frame type for NV12 input: "
+                                      << dataOpt->frame.type() << ". Expected CV_8UC1. Frame will be skipped.");
+            continue;
+        }
 
-        pipeline::FrameData data = std::move(dataOpt.value());
-        if(data.frame.empty()) continue;
+
 
         try {
+            cv::Mat outputBGR;
+            cv::cvtColor(dataOpt->frame, outputBGR, cv::COLOR_YUV2BGR_NV12); // extremely slow
+            publishMotionEventFrame(outputBGR, dataOpt->timestamp);
 
-            gpuFrame.upload(data.frame);
-
-            int motionWidth = static_cast<int>(1920 * params.motionDownScale);
-            int motionHeight = static_cast<int>(1080 * params.motionDownScale);
-            gpuMotionFrame = components.cudaPreprocessor->process(gpuFrame, motionWidth, motionHeight, true, true);
-            
-            publishMotionEventFrame(gpuFrame, data.timestamp);                
-
-        } catch (const std::exception& e) {
-            publishError("CUDA processing error: " + std::string(e.what()));
+        } catch (const cv::Exception& e) {
+            ROS_ERROR_STREAM_THROTTLE(1.0, "[PipelineNode - Processing Thread] OpenCV (CUDA) Exception: " << e.what()
+                                       << " | Input frame dims: " << dataOpt->frame.rows << "x" << dataOpt->frame.cols
+                                       << " type: " << dataOpt->frame.type());
+            continue;
         }
         
     }
+
+    ROS_INFO("[PipelineNode - Processing Thread] Exiting.");
 }
 
 
