@@ -3,6 +3,7 @@
 #include "components/pipelineInitialDetectionLite.hpp"
 #include "components/pipelineInternal.hpp"
 
+
 // #include "surveillance_system/motion_detection_events_array.h"
 //  #include "surveillance_system/motion_event.h"
 // #include <sensor_msgs/RegionOfInterest.h>
@@ -35,7 +36,27 @@ bool PipelineNode::initializePipelineNode() {
     components.cameraSrc = std::make_unique<pipeline::HarrierCaptureSrc>(params.devicePath, params.frameRate, params.nightMode);
     components.pipelineInternal = std::make_unique<pipeline::PipelineInternal>(params.frameRate, params.nightMode);
     components.pipelineIntegratedMotionDetection = std::make_unique<pipeline::PipelineInitialDetectionLite>(params.motionMinAreaPx, params.motionDownScale, params.motionHistory, params.motionSamplingRate);
+    components.cudaPreprocessor = std::make_unique<cuda_components::CUDAPreprocessor>(1920, 1080, 10);
     components.rawFrameQueue.initialize(params.bufferSize);
+
+    int frameW = 1920;
+    int frameYH = 1080;
+    int nv12BufH = frameYH * 3 / 2;
+    int matNV12Comp = CV_8UC1;
+    int poolSize = 3;
+
+    try {
+        
+        components.hostFramePool.reserve(poolSize);
+        for (int i = 0; i < poolSize; ++i) {
+            components.hostFramePool.emplace_back(nv12BufH, frameW, matNV12Comp, cv::cuda::HostMem::PAGE_LOCKED);
+        }
+    } catch (const cv::Exception& e) {
+        publishError("OpenCV Exception during pinned memory allocation: " + std::string(e.what()));
+        ROS_ERROR("OpenCV Exception during pinned memory allocation: %s", e.what());
+        return false;
+    }
+
 
     if (!components.cameraSrc->initializeRawSrcForCapture()) {
         publishError("Failed to initialize camera after multiple attempts.");
@@ -67,7 +88,7 @@ void PipelineNode::loadParameters(ros::NodeHandle& nh_priv, pipeline::Configurat
     return;
 }
 
-void PipelineNode::publishRawFrame(const cv::Mat& frame, const ros::Time& timestamp) {
+void PipelineNode::publishRawFrame(const  cv::Mat& frame, const ros::Time& timestamp) {
     try {
         cv_bridge::CvImage cvImage;
         cvImage.encoding = (frame.channels() == 1 ? sensor_msgs::image_encodings::MONO8 : sensor_msgs::image_encodings::BGR8);
@@ -127,67 +148,61 @@ void PipelineNode::stopWorkerThreads() {
 
 void PipelineNode::captureLoop() {
     ROS_INFO("[PipelineNode - Capture Thread] Thread started.");
-    cv::Mat rawFrame;
     ros::Rate loopRate(params.frameRate > 0 ? params.frameRate : 30);
+
 
     while (pipelineRunning && ros::ok()) {
         ros::Time captureTimestamp = ros::Time::now();
-        bool captureStatus = components.cameraSrc->captureFrameFromSrc(rawFrame);
+        cv::Mat frame = components.hostFramePool[components.bufferIdx].createMatHeader();
 
-        if (!pipelineRunning)
-            break;
+        bool capture = components.cameraSrc->captureFrameFromSrc(frame);
 
-        if (captureStatus) {
-            if (!rawFrame.empty()) {
-                pipeline::FrameData data{rawFrame.clone(), captureTimestamp};
-                if (!components.rawFrameQueue.try_push(std::move(data))) {
-                    ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Raw frame queue full, dropping frame.");
-                }
-            } else {
-                ROS_WARN_THROTTLE(2.0, "[PipelineNode - Capture Thread] Captured empty frame.");
+        if(capture && !frame.empty()) {
+            pipeline::FrameData data; 
+            frame.copyTo(data.frame); data.timestamp = captureTimestamp;
+            components.bufferIdx = (components.bufferIdx + 1) % components.hostFramePool.size();
+            if(not components.rawFrameQueue.try_push(std::move(data))) {
+                ROS_WARN_THROTTLE(1.0, "Queue full, dropping frame");
             }
-        } else {
-            publishError("[PipelineNode - Capture Thread] Frame capture failed.");
         }
+
+        loopRate.sleep();
     }
+
     ROS_INFO("[PipelineNode - Capture Thread] Exiting.");
 }
 
 
 void PipelineNode::processingLoop() {
     ROS_INFO("[PipelineNode - Processing Thread] Thread started.");
-    cv::Mat processedFrame;
-    cv::Mat frameForMotionDetection;
-    std::vector<cv::Rect> motionRects;
-    bool motionPresence = false;
 
     while(pipelineRunning && ros::ok()) {
         std::optional<pipeline::FrameData> dataOpt = components.rawFrameQueue.pop();
-
-        if(!dataOpt.has_value()) {
-            ROS_WARN("[PipelineNode - Processing Thread] Queue pop returned nullopt unexpectedly.");
-            break;
-        }
-
-        if(!pipelineRunning) break;
-
-        pipeline::FrameData data = std::move(dataOpt.value());
-        if(data.frame.empty()) {
-            ROS_WARN("[PipelineNode - Processing Thread] Received empty frame from queue.");
+        if (!pipelineRunning && (!dataOpt.has_value() || dataOpt->frame.empty())) break;
+        
+        if (dataOpt->frame.type() != CV_8UC1) {
+            ROS_ERROR_STREAM_THROTTLE(1.0, "[PipelineNode - Processing Thread] Invalid frame type for NV12 input: "
+                                      << dataOpt->frame.type() << ". Expected CV_8UC1. Frame will be skipped.");
             continue;
         }
 
-        // publishRawFrame(data.frame, data.timestamp); // Debug
-        // publishMotionEventFrame(data.frame, data.timestamp);
-        processedFrame = components.pipelineInternal->processFrame(data.frame);
-        if(processedFrame.empty()) ROS_WARN("[PipelineNode - Processing Thread] Frame processing resulted in empty frame.");
-        
-        motionPresence = components.pipelineIntegratedMotionDetection->detect(processedFrame, motionRects);
-        
-        
-        publishMotionEventFrame(data.frame, data.timestamp);
+
+
+        try {
+            cv::Mat outputBGR;
+            cv::cvtColor(dataOpt->frame, outputBGR, cv::COLOR_YUV2BGR_NV12); // extremely slow
+            publishMotionEventFrame(outputBGR, dataOpt->timestamp);
+
+        } catch (const cv::Exception& e) {
+            ROS_ERROR_STREAM_THROTTLE(1.0, "[PipelineNode - Processing Thread] OpenCV (CUDA) Exception: " << e.what()
+                                       << " | Input frame dims: " << dataOpt->frame.rows << "x" << dataOpt->frame.cols
+                                       << " type: " << dataOpt->frame.type());
+            continue;
+        }
         
     }
+
+    ROS_INFO("[PipelineNode - Processing Thread] Exiting.");
 }
 
 

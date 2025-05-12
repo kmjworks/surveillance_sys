@@ -15,6 +15,7 @@
 #include <memory>
 
 #include "ThreadSafeQueue/ThreadSafeQueue.hpp"
+#include "components/cuda/cudaPreprocessor.hpp"
 
 namespace pipeline {
     class HarrierCaptureSrc;
@@ -36,7 +37,13 @@ namespace pipeline {
         std::unique_ptr<HarrierCaptureSrc> cameraSrc;
         std::unique_ptr<PipelineInternal> pipelineInternal;
         std::unique_ptr<PipelineInitialDetectionLite> pipelineIntegratedMotionDetection;
+        std::unique_ptr<cuda_components::CUDAPreprocessor> cudaPreprocessor;
         ThreadSafeQueue<FrameData> rawFrameQueue;
+
+        cv::cuda::Stream stream;
+        cv::cuda::GpuMat gpuFrameBuffer[2];
+        std::vector<cv::cuda::HostMem> hostFramePool;
+        int bufferIdx = 0;
     };
 
     struct ConfigurationParameters {

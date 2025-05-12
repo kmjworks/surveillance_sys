@@ -16,6 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(OpenCV REQUIRED)
+find_package(CUDA REQUIRED)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -gencode arch=compute_72,code=sm_72)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0>=1.8)
@@ -41,6 +43,10 @@ include_directories(
   ${GLIB_INCLUDE_DIRS}
 )
 
+cuda_add_library(cuda_components
+  src/components/cuda/cudaPreprocessor.cu
+)
+
 add_library(${PROJECT_NAME}
   src/pipelineNode.cpp
   src/components/pipelineInternal.cpp
@@ -48,9 +54,16 @@ add_library(${PROJECT_NAME}
   src/components/harrierCaptureSrc.cpp
 )
 
+target_link_libraries(cuda_components
+  ${OpenCV_LIBS}
+  ${CUDA_LIBRARIES}
+)
+
+
 target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
+  cuda_components
 )
 
 add_executable(pipeline_node src/main.cpp)

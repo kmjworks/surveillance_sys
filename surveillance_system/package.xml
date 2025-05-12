@@ -13,9 +13,8 @@
   <exec_depend>surveillance_system_camera</exec_depend>
   <exec_depend>surveillance_system_capture</exec_depend>
   <exec_depend>surveillance_system_diagnostics</exec_depend>
-  <exec_depend>surveillance_system_motion_detection</exec_depend>
+  <exec_depend>surveillance_system_detection_deepstream</exec_depend>
   <exec_depend>surveillance_system_motion_tracking</exec_depend>
-  <exec_depend>surveillance_system_pipeline</exec_depend>
   <exec_depend>surveillance_system_param_manager</exec_depend>
 
   <export>

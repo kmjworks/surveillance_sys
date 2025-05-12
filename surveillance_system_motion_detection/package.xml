@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>surveillance_system_motion_detection</name>
+  <name>surveillance_system_motion_detection_old</name>
   <version>0.1.0</version>
   <description>Motion detection node using TensorRT for the Surveillance System</description>
   <maintainer email="kmj@taltech.ee">kmj</maintainer>

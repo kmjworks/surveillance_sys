@@ -319,8 +319,19 @@ void MotionDetectionNode::publishForVisualization(
             float score = hyp.score;
             std::string label = "unknown";
 
+
             if (classID >= 0 && classID < static_cast<int>(classNames.size())) {
-                label = classNames[classID];
+                switch(classID) {
+                    case 0:
+                        label = "human";
+                        break;
+                    case 1:
+                        label = "dog";
+                        break;
+                    case 2:
+                        label = "cat";
+                        break;
+                }
             }
 
             std::ostringstream ss;

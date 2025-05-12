@@ -12,7 +12,7 @@ namespace pipeline {
             int history = 120,
             int detectInterval = 2);
 
-        bool detect(const cv::Mat& frame, std::vector<cv::Rect>& outRois);
+        bool detect(const cv::cuda::GpuMat& preprocGpuFrame, std::vector<cv::Rect>& outRois);
 
     private:
         cv::Mat convertGrayFaster(const cv::Mat& in);    

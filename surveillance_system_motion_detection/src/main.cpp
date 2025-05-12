@@ -2,7 +2,8 @@
 #include "motionDetectionNode_trt.hpp"
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "motion_detector_node");
+    return 0;
+    ros::init(argc, argv, "motion_detector_node_old");
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");
 
