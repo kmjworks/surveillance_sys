@@ -1,7 +1,5 @@
 # Surveillance System
 
-A modular ROS package for a comprehensive surveillance system with motion detection, tracking, and recording capabilities.
-
 ## System Architecture
 
 The surveillance system is divided into multiple ROS packages:
@@ -10,9 +8,12 @@ The surveillance system is divided into multiple ROS packages:
 - **surveillance_system_common**: Common utilities and shared components
 - **surveillance_system_camera**: Camera interface (not completed and is not currently actively used)
 - **surveillance_system_pipeline**: Video processing pipeline
-- **surveillance_system_motion_detection**: Motion detection using YOLOv8
+    - Replaced by surveillance_system_detection_deepstream combining the pipeline and the detector
+- **surveillance_system_detection_deepstream**: Motion detection using YOLOv8
 - **surveillance_system_motion_tracking**: Object tracking using DeepSORT
+   -  DeepSORT's components (Tracker and the interface itself are under the common components directory)
 - **surveillance_system_capture**: Frame capture and storage
+   -  Not utilized actively as storing on the platform itself is computationally expensive in terms of I/O operations
 - **surveillance_system_diagnostics**: System diagnostics and monitoring
 - **surveillance_system**: Meta-package containing launch files and configurations
 
