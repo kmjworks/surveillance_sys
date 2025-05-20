@@ -1,5 +1,8 @@
 # Surveillance System
 
+## Description
+
+A modular surveillance system with motion detection, ReID, tracking and recording capabilities. 
 
 ## TODO / Problems
 
@@ -37,6 +40,8 @@ The surveillance system is divided into multiple ROS packages:
 **Obsolete components**:
 - **surveillance_system_pipeline**: Replaced by **surveillance_system_detection_deepstream** combining the video pipeline and detector inference
 - **surveillance_system_detection**: Same as above
+
+**Active system components**
 
 - **surveillance_system_msgs**: Message and service definitions
 - **surveillance_system_common**: Common utilities and shared components
