@@ -8,9 +8,9 @@ The surveillance system is divided into multiple ROS packages:
 
 - **surveillance_system_msgs**: Message and service definitions
 - **surveillance_system_common**: Common utilities and shared components
-- **surveillance_system_camera**: Camera interface and simulation
+- **surveillance_system_camera**: Camera interface (not utilized currently)
 - **surveillance_system_pipeline**: Video processing pipeline
-- **surveillance_system_motion_detection**: AI-based motion detection using YOLOv8
+- **surveillance_system_motion_detection**: Motion detection using YOLOv8s
 - **surveillance_system_motion_tracking**: Object tracking using DeepSORT
 - **surveillance_system_capture**: Frame capture and storage
 - **surveillance_system_diagnostics**: System diagnostics and monitoring
@@ -37,7 +37,7 @@ catkin build
 
 ## Launch
 
-The system can be launched in different configurations:
+The system can be launched in a single configurations:
 
 ### Production System
 
@@ -45,18 +45,11 @@ The system can be launched in different configurations:
 roslaunch surveillance_system system.launch
 ```
 
-### Simulation
-
-```bash
-roslaunch surveillance_system simulation.launch
-```
-
 ## Configuration
 
 Configuration parameters are stored in YAML files in the `config` directory:
 
 - `system_params.yaml`: Production system parameters
-- `simulation_params.yaml`: Simulation parameters
 
 ## Models
 
@@ -64,6 +57,7 @@ The DeepSORT CNN and YOLOv8 detection model are stored in the `models` directory
 
 - `yolov8_finetuned_fp16.engine`: Detection model (TensorRT engine)
 - `deepsort.engine`: Tracking model (TensorRT engine)
+- .onnx formats not included (for now) 
 
 
 ## License
