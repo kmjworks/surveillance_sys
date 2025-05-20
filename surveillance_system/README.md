@@ -30,7 +30,7 @@ The surveillance system is divided into multiple ROS packages:
 mkdir -p ~/catkin_ws/src
 cd ~/catkin_ws/src
 
-git clone https://your-git-server/surveillance_system.git .
+git clone https://github.com/kmjworks/surveillance_system.git .
 
 cd ~/catkin_ws
 catkin build
