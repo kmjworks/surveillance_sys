@@ -1,5 +1,8 @@
 # Surveillance System
 
+## Description
+
+A modular surveillance system with motion detection, ReID, tracking and recording capabilities. 
 
 ## TODO / Problems
 
